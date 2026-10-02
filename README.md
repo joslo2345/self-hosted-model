@@ -25,3 +25,13 @@ There is no hosted CI (to keep GitHub Actions minutes at zero). Run before every
 ```bash
 make check   # ruff, mypy --strict, pytest
 ```
+
+## Serve a model locally (B1)
+
+```bash
+make engine                     # once: pinned vLLM + vllm-metal in .venv-engine
+make serve CANDIDATE=qwen       # or granite / gemma; pinned revision and parsers per model
+make smoke                      # chat, streaming and tool-call checks against the endpoint
+```
+
+The shortlist and why each model is on it are in [docs/DECISIONS.md](docs/DECISIONS.md).

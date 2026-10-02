@@ -20,16 +20,30 @@ test:  ## Unit tests
 check: lint typecheck test  ## Everything to run before a push (there is no hosted CI)
 
 # ---- B1: local serving (vLLM + vllm-metal on the Apple GPU) ----
+# Shortlisted models, pinned to a revision with the parsers each one needs (docs/DECISIONS.md).
+CANDIDATE ?= qwen
+ifeq ($(CANDIDATE),qwen)
 MODEL ?= mlx-community/Qwen3.5-9B-MLX-8bit
 REVISION ?= 84f7c2deea248d8df56240f88102def51c7ed5d6
+SERVE_ARGS ?= --tool-call-parser qwen3_coder --reasoning-parser qwen3
+else ifeq ($(CANDIDATE),granite)
+MODEL ?= ibm-granite/granite-4.2-8b-q8-mlx
+REVISION ?= a60999a162a4799c52a7bd6ec65c780d6138cfcf
+SERVE_ARGS ?= --tool-call-parser qwen3_coder --reasoning-parser nemotron_v3
+else ifeq ($(CANDIDATE),gemma)
+MODEL ?= mlx-community/gemma-4-e4b-it-8bit
+REVISION ?= 4255b21bd9a9d3fc807ef7abd80373f5e3a52a73
+SERVE_ARGS ?= --tool-call-parser gemma4 --reasoning-parser gemma4
+else
+$(error CANDIDATE must be qwen, granite or gemma)
+endif
 NAME ?= candidate
 PORT ?= 8000
-SERVE_ARGS ?= --tool-call-parser qwen3_coder --reasoning-parser qwen3
 
 engine:  ## Install pinned vLLM + vllm-metal into .venv-engine
 	./scripts/install_engine.sh
 
-serve:  ## Serve MODEL on 127.0.0.1:PORT as NAME (OpenAI-compatible; SERVE_ARGS for parser flags)
+serve:  ## Serve a shortlisted model on 127.0.0.1:PORT as NAME (CANDIDATE=qwen|granite|gemma)
 	.venv-engine/bin/vllm serve $(MODEL) --revision $(REVISION) --served-model-name $(NAME) --host 127.0.0.1 --port $(PORT) \
 	  --max-model-len 32768 --enable-auto-tool-choice $(SERVE_ARGS)
 
