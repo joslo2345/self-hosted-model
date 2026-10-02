@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.env
+# Model weights and Hugging Face cache never go in Git
+/models/
+*.safetensors
+*.gguf
+# Raw run output (summaries are committed under results/)
+/runs/
+/.venv-engine/
