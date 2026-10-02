@@ -1,6 +1,6 @@
 """Command-line entry point.
 
-    selfhost smoke --base-url http://127.0.0.1:8000/v1 --model <served-model-name>
+selfhost smoke --base-url http://127.0.0.1:8000/v1 --model <served-model-name>
 """
 
 from __future__ import annotations

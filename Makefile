@@ -21,15 +21,16 @@ check: lint typecheck test  ## Everything to run before a push (there is no host
 
 # ---- B1: local serving (vLLM + vllm-metal on the Apple GPU) ----
 MODEL ?= mlx-community/Qwen3.5-9B-MLX-8bit
+REVISION ?= 84f7c2deea248d8df56240f88102def51c7ed5d6
 NAME ?= candidate
 PORT ?= 8000
-SERVE_ARGS ?=
+SERVE_ARGS ?= --tool-call-parser qwen3_coder --reasoning-parser qwen3
 
 engine:  ## Install pinned vLLM + vllm-metal into .venv-engine
 	./scripts/install_engine.sh
 
 serve:  ## Serve MODEL on 127.0.0.1:PORT as NAME (OpenAI-compatible; SERVE_ARGS for parser flags)
-	.venv-engine/bin/vllm serve $(MODEL) --served-model-name $(NAME) --host 127.0.0.1 --port $(PORT) \
+	.venv-engine/bin/vllm serve $(MODEL) --revision $(REVISION) --served-model-name $(NAME) --host 127.0.0.1 --port $(PORT) \
 	  --max-model-len 32768 --enable-auto-tool-choice $(SERVE_ARGS)
 
 smoke:  ## Chat, streaming and tool-call checks against the running endpoint

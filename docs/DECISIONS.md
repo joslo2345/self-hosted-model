@@ -11,3 +11,11 @@ What was chosen, what was rejected, and why. Newest package last.
   applied; cloud and hosted-API costs are calculated from published prices.
 - **No hosted CI.** `make check` runs locally before every push, so the repo uses no GitHub
   Actions minutes.
+
+## B1 · Serving flags (2026-10-02)
+
+- **Parsers:** Qwen3.5 emits tool calls in the Qwen3-Coder XML format, so serving uses
+  `--tool-call-parser qwen3_coder` (not `hermes`) plus `--reasoning-parser qwen3`, which keeps
+  the thinking text out of `content`. These are the Makefile defaults; override `SERVE_ARGS`
+  for other candidates.
+- **Pinned revision:** `make serve` passes `--revision` so results are reproducible.
