@@ -1,6 +1,6 @@
 """Command-line entry point.
 
-selfhost smoke --base-url http://127.0.0.1:8000/v1 --model <served-model-name>
+selfhost smoke --base-url http://127.0.0.1:8100/v1 --model <served-model-name>
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
 
     smoke = sub.add_parser("smoke", help="chat, streaming and tool-call checks on an endpoint")
-    smoke.add_argument("--base-url", default="http://127.0.0.1:8000/v1")
+    smoke.add_argument("--base-url", default="http://127.0.0.1:8100/v1")
     smoke.add_argument("--model", required=True)
     smoke.add_argument("--api-key", default="not-needed")
 

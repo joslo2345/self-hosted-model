@@ -38,14 +38,18 @@ else
 $(error CANDIDATE must be qwen, granite or gemma)
 endif
 NAME ?= candidate
-PORT ?= 8000
+# 8100, because Project A's local stack uses 8000.
+PORT ?= 8100
+# Share of unified memory vLLM may use; 0.6 leaves room for Project A's Docker stack.
+GPU_MEM ?= 0.6
 
 engine:  ## Install pinned vLLM + vllm-metal into .venv-engine
 	./scripts/install_engine.sh
 
-serve:  ## Serve a shortlisted model on 127.0.0.1:PORT as NAME (CANDIDATE=qwen|granite|gemma)
+serve:  ## Serve a shortlisted model on 127.0.0.1:PORT (CANDIDATE=qwen|granite|gemma, THINK=true|false)
 	.venv-engine/bin/vllm serve $(MODEL) --revision $(REVISION) --served-model-name $(NAME) --host 127.0.0.1 --port $(PORT) \
-	  --max-model-len 32768 --enable-auto-tool-choice $(SERVE_ARGS)
+	  --max-model-len 32768 --gpu-memory-utilization $(GPU_MEM) --enable-auto-tool-choice $(SERVE_ARGS) \
+	  $(if $(THINK),--default-chat-template-kwargs '{"enable_thinking": $(THINK)}')
 
 smoke:  ## Chat, streaming and tool-call checks against the running endpoint
 	uv run selfhost smoke --base-url http://127.0.0.1:$(PORT)/v1 --model $(NAME)
