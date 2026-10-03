@@ -77,3 +77,31 @@ Findings:
 - **The action misses differ by model.** Qwen's 3 misses: `replace_part` on two gpu_off_bus cases and
   `monitor` on one power fault. Granite's 3 misses all left a power fault in service (`monitor` or `none`).
   Gemma's 4 misses: `replace_part` on two NVLink cases, `reset_gpu`, and `escalate`.
+
+## B1 · Quantization: Qwen3.5-9B at 4-bit, 8-bit and bf16 (2026-10-02)
+
+The same 20 cases, the same harness and judge, thinking off. All three are the `mlx-community/Qwen3.5-9B-MLX-*`
+conversions of one checkpoint (revisions pinned in the Makefile as `CANDIDATE=qwen4|qwen|qwenbf16`).
+MLX quantizes weights with affine group-wise quantization (group size 64). The plan's AWQ and GPTQ
+are CUDA formats that vllm-metal can't load, so this is the Apple-GPU equivalent.
+
+| Precision | Weights | Root cause | Action allowed | Fault left in service | Right runbook | Citation support | Steps per case | Tokens per case | Latency p50 / p95 | Decode tok/s | Failed |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 4-bit | **6.0 GB** | 17/20 | 14/20 | 0 | 15/20 | 97% | 9.2 | 110,566 | 168 / 278 s | **13.5** | 2 (context overflow) |
+| **8-bit (chosen)** | 10.5 GB | **20/20** | 17/20 | 1 | **18/20** | **99%** | **4.3** | 40,084 | **147 / 222 s** | 11.6 | 0 |
+| bf16 | 18.8 GB | **20/20** | **18/20** | **0** | **18/20** | 96% | **4.3** | **38,935** | 214 / 324 s | 7.2 | 0 |
+
+Decode speed is the median of vLLM's 10-second throughput log while serving one request. Those windows include
+some prompt processing, so read the speeds as relative rather than as peak decode. bf16 ran at
+`GPU_MEM=0.7`, because at 0.6 vLLM computed a negative cache budget (-1.6 GB) and refused to start. The
+other two ran at 0.6. Swap fell during the bf16 run (9.5 → 7.3 GB), so memory pressure didn't
+affect its latency.
+
+Findings:
+- **4-bit breaks the agent loop.** It took twice as many steps (9.2 vs 4.3) and 2.8× the tokens.
+  Two runs looped until they overflowed the 32k context, and it misread one gpu_off_bus fault as
+  pcie_degradation. Its faster decode doesn't make up for the extra steps.
+- **8-bit loses one action decision against bf16** (17 vs 18; a power fault left on `monitor`). It
+  matches bf16 on root cause and runbook, uses 56% of the memory, and is 31% faster at p50.
+- **bf16 is the most accurate run in B1.** It's also the only one to match the baseline's 18/20 on
+  actions. On a GPU with memory to spare (B2), it's worth re-testing.

@@ -76,3 +76,14 @@ Method choices:
 - vLLM serves on port 8100 at 60% of unified memory, so Project A's Docker stack runs alongside it.
 - The judge (`gemma3:12b` on Ollama) ran after the agent runs, not during them, because the two
   models don't fit in memory together. Root cause, actions and runbook scores don't use the judge.
+
+## B1 · Precision (2026-10-02)
+
+**8-bit** (results in docs/RESULTS.md, "Quantization").
+- **4-bit rejected:** it doubled the agent's steps, overflowed the context twice and lost 3 root
+  causes. The memory saving (6.0 vs 10.5 GB) isn't worth it at 36 GB.
+- **bf16 not chosen for the laptop:** it was one action decision better, but needed 1.8× the memory
+  (it only fits with Project A's stack at a 70% cap) and was 45% slower at p50. Re-test it on GPU
+  hardware in B2, where memory is less tight and bf16 is the more usual serving format.
+- AWQ and GPTQ (named in the plan) are CUDA formats; MLX's group-wise 4- and 8-bit quantization is the
+  equivalent on Apple GPUs. B2 can compare AWQ against FP16 on an NVIDIA GPU if credits allow.

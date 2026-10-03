@@ -61,6 +61,7 @@
     "p50": 147,
     "p95": 222,
     "tok": 40084,
+    "steps": 4.3,
     "errs": {},
     "citation_support": 0.988
   },
@@ -90,5 +91,33 @@
     "errs": {},
     "citation_support": 0.925,
     "source": "project-a eval/reports/a6/test/final-r3.json, first 20 cases"
+  },
+  "qwen4-nothink": {
+    "valid": 18,
+    "root": 17,
+    "action": 14,
+    "missed": 0,
+    "runbook": 15,
+    "p50": 168,
+    "p95": 278,
+    "tok": 110566,
+    "steps": 9.2,
+    "errs": {
+      "error": 2
+    },
+    "citation_support": 0.968
+  },
+  "qwenbf16-nothink": {
+    "valid": 20,
+    "root": 20,
+    "action": 18,
+    "missed": 0,
+    "runbook": 18,
+    "p50": 214,
+    "p95": 324,
+    "tok": 38935,
+    "steps": 4.3,
+    "errs": {},
+    "citation_support": 0.958
   }
 }
