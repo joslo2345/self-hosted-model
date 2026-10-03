@@ -38,6 +38,8 @@ else
 $(error CANDIDATE must be qwen, granite or gemma)
 endif
 NAME ?= candidate
+# Thinking off by default: it was better for every model in the B1 comparison (docs/RESULTS.md).
+THINK ?= false
 # 8100, because Project A's local stack uses 8000.
 PORT ?= 8100
 # Share of unified memory vLLM may use; 0.6 leaves room for Project A's Docker stack.

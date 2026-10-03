@@ -48,3 +48,31 @@ Rejected:
 Parsers per model (`make serve CANDIDATE=...`): Qwen uses `qwen3_coder` + `qwen3`. Granite uses
 `qwen3_coder` + `nemotron_v3`; the model card names both as compatible, and its custom
 `granite_thinking_parser` plugin was skipped to keep the engine stock. Gemma uses `gemma4` + `gemma4`.
+
+## B1 · Model choice (2026-10-02)
+
+**Chosen: Qwen3.5-9B (8-bit MLX), thinking off** (`make serve`, which now defaults to `THINK=false`).
+The evidence is the 20-incident comparison in docs/RESULTS.md.
+
+- It ties for the best root cause (20/20, against 18/20 for the baseline) and has the best runbook
+  citations (18/20) and citation support (99%), with no failed runs.
+- It leaves one real fault in service, against Granite's three. Its other misses are too aggressive
+  (`replace_part` where the runbook says drain). On a GPU fleet, a broken GPU left serving jobs costs more
+  than an unneeded part swap, so this decided Qwen over Granite.
+- It's about 25% slower than Granite (p50 147 s vs 117 s, single stream). That's acceptable for an
+  incident assistant; B4 measures it under load.
+
+Rejected:
+- **Granite 4.2 8B:** the fastest and steadiest, and close on accuracy. It's the runner-up, and the
+  pick if latency turns out to matter more than the power-fault misses.
+- **Gemma 4 E4B:** the smallest and never left a fault in service. But it had the weakest action and
+  runbook scores, and with thinking on its tool calls broke.
+- **Thinking on (any model):** every model did worse with it on this hardware. Revisit it on GPU
+  hardware in B2–B4, where decode is several times faster.
+
+Method choices:
+- Thinking is switched on the server (`--default-chat-template-kwargs`), not in Project A, so the
+  "config switch, no code change" claim holds.
+- vLLM serves on port 8100 at 60% of unified memory, so Project A's Docker stack runs alongside it.
+- The judge (`gemma3:12b` on Ollama) ran after the agent runs, not during them, because the two
+  models don't fit in memory together. Root cause, actions and runbook scores don't use the judge.

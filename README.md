@@ -30,8 +30,10 @@ make check   # ruff, mypy --strict, pytest
 
 ```bash
 make engine                     # once: pinned vLLM + vllm-metal in .venv-engine
-make serve CANDIDATE=qwen       # or granite / gemma; pinned revision and parsers per model
+make serve                      # chosen model (Qwen3.5-9B, thinking off) on 127.0.0.1:8100
+make serve CANDIDATE=granite THINK=true   # other shortlisted models, thinking on
 make smoke                      # chat, streaming and tool-call checks against the endpoint
 ```
 
-The shortlist and why each model is on it are in [docs/DECISIONS.md](docs/DECISIONS.md).
+Why Qwen3.5-9B with thinking off: [docs/DECISIONS.md](docs/DECISIONS.md). To rerun the 20-incident
+comparison against Project A's eval harness (its stack must be up): `scripts/compare_b1.sh`.

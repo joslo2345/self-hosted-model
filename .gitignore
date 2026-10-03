@@ -12,3 +12,6 @@ __pycache__/
 # Raw run output (summaries are committed under results/)
 /runs/
 /.venv-engine/
+# B1 comparison logs (reports and summary.json are committed)
+/eval/b1/logs/
+/eval/b1/progress.log
