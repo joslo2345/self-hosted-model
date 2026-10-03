@@ -1,0 +1,111 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  labels: {{- include "vllm.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  # One GPU and a ReadWriteOnce cache volume: the old pod must stop before the new one starts.
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: {{- include "vllm.selector" . | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "vllm.labels" . | nindent 8 }}
+    spec:
+      {{- if .Values.gpu.enabled }}
+      nodeSelector: {{- toYaml .Values.gpu.nodeSelector | nindent 8 }}
+      tolerations: {{- toYaml .Values.gpu.tolerations | nindent 8 }}
+      {{- end }}
+      automountServiceAccountToken: false
+      # A Service named "vllm" would inject VLLM_PORT=tcp://..., which vLLM reads as its own
+      # setting and refuses to start.
+      enableServiceLinks: false
+      {{- if and .Values.cache.enabled .Values.cache.prefetch }}
+      # Download the weights to the cache volume before vLLM starts, so download and model load
+      # never share memory, a failed download retries without restarting the engine, and the
+      # startup probe only has to cover loading. A no-op when the weights are already cached.
+      initContainers:
+        - name: fetch-weights
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["python3", "-c"]
+          args:
+            - |
+              from huggingface_hub import snapshot_download
+              path = snapshot_download({{ .Values.model.name | quote }}, revision={{ .Values.model.revision | quote }},
+                                       allow_patterns=["*.json", "*.safetensors", "*.txt", "*.model", "*.jinja"])
+              print("weights in", path)
+          env:
+            - { name: HF_HOME, value: /cache/huggingface }
+            {{- if .Values.cache.offline }}
+            - { name: HF_HUB_OFFLINE, value: "1" }
+            {{- end }}
+          resources: {{- toYaml .Values.cache.prefetchResources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: cache, mountPath: /cache }
+      {{- end }}
+      containers:
+        - name: vllm
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - --model={{ .Values.model.name }}
+            - --revision={{ .Values.model.revision }}
+            - --served-model-name={{ .Values.model.servedName }}
+            - --max-model-len={{ .Values.model.maxModelLen }}
+            - --host=0.0.0.0
+            - --port={{ .Values.service.port }}
+            {{- range .Values.model.args }}
+            - {{ . | quote }}
+            {{- end }}
+          env:
+            - name: VLLM_API_KEY
+              valueFrom:
+                secretKeyRef: { name: {{ .Values.auth.existingSecret }}, key: {{ .Values.auth.secretKey }} }
+            - { name: HF_HOME, value: /cache/huggingface }
+            {{- if .Values.cache.offline }}
+            - { name: HF_HUB_OFFLINE, value: "1" }
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports: [{ name: http, containerPort: {{ .Values.service.port }} }]
+          # /health answers once the engine has loaded the model (the API server isn't listening
+          # before that), and it needs no API key.
+          startupProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: {{ .Values.probes.startup.periodSeconds }}
+            failureThreshold: {{ .Values.probes.startup.failureThreshold }}
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+          resources:
+            {{- $res := deepCopy .Values.resources }}
+            {{- if .Values.gpu.enabled }}
+            {{- $_ := set $res.limits "nvidia.com/gpu" .Values.gpu.count }}
+            {{- end }}
+            {{- toYaml $res | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: cache, mountPath: /cache }
+            - { name: shm, mountPath: /dev/shm }
+      volumes:
+        - name: cache
+          {{- if .Values.cache.enabled }}
+          persistentVolumeClaim: { claimName: {{ .Release.Name }}-cache }
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: shm
+          emptyDir: { medium: Memory, sizeLimit: {{ .Values.shmSize }} }

@@ -105,3 +105,48 @@ Findings:
   matches bf16 on root cause and runbook, uses 56% of the memory, and is 31% faster at p50.
 - **bf16 is the most accurate run in B1.** It's also the only one to match the baseline's 18/20 on
   actions. On a GPU with memory to spare (B2), it's worth re-testing.
+
+## B2 · Kubernetes deployment (2026-10-03)
+
+The chart (`deploy/helm/vllm`) was tested on a local kind cluster with Calico, using vLLM's CPU
+image (`vllm/vllm-openai-cpu:v0.30.0`) and `Qwen/Qwen3.5-0.8B` as a stand-in for the GPU model. The
+AKS GPU pool (`infra/azure`) passes `terraform validate` against the azurerm 5.8 provider. Nothing
+was applied in Azure ($0).
+
+**Chart checks on kind** (`make kind-check`, all passing):
+
+| Check | Result |
+| --- | --- |
+| `/health` without a key (used by the probes) | 200 |
+| API without a key / with the key | 401 / 200 |
+| From Project A's agent pod (namespace `ia`, `app.kubernetes.io/name=agent`) | allowed |
+| From another pod in `ia`, or from a pod in vLLM's own namespace, with the key | blocked by NetworkPolicy |
+| Streaming (protocol level) | 34 SSE chunks, then `[DONE]` |
+
+**Cold start on kind**, from pod created to Ready (`make cold-start`, image already on the node):
+
+| Start | Pod to Ready | Weight fetch (init container) |
+| --- | --- | --- |
+| Empty cache volume | 65 s | 21 s |
+| Cached weights | 43 s | 1 s |
+| Cached + `HF_HUB_OFFLINE` | **31 s** | 1 s |
+
+The image pull added 30 s on first use (1.3 GB CPU image). The weight cache plus offline mode cut
+startup by about half (65 → 31 s). The download share grows with model size: the 0.8B weights
+(1.6 GB) took 21 s, about 80 MB/s. At that rate the GPU model's bf16 weights (19 GB) would take
+about 4 minutes, which is the step the cache volume removes on every restart after the first.
+
+Not measured, because doing so costs money: GPU node scale-up time, and model load time on an A100.
+The plan's "time from node scale-up to first token" needs a real GPU node; B4 can measure it if
+cloud credits are available.
+
+Problems the kind test caught before any cloud run:
+- **Service links broke vLLM.** A Service named `vllm` makes Kubernetes inject `VLLM_PORT=tcp://…`,
+  which vLLM reads as its own setting and refuses to start. Fixed with `enableServiceLinks: false`.
+  The GPU deployment would have failed the same way.
+- **Download and load in one process ran out of memory.** On the first start vLLM downloaded and
+  loaded the weights in the same process, and the memory peak OOM-killed it. Fixed with a
+  `fetch-weights` init container that downloads to the cache volume first. Download retries no
+  longer restart the engine, and the startup probe only has to cover loading.
+- **The vision encoder was loaded for nothing.** Qwen3.5 loads it by default. The agent is text-only,
+  so both value sets set `--limit-mm-per-prompt` to zero images and video.

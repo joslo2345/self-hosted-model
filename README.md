@@ -10,8 +10,8 @@ written and validated but never applied; cloud costs are calculated from publish
 
 | Package | Focus | Status |
 | --- | --- | --- |
-| B1 | Model selection and local vLLM | in progress |
-| B2 | Kubernetes deployment | |
+| B1 | Model selection and local vLLM | done: Qwen3.5-9B 8-bit, thinking off |
+| B2 | Kubernetes deployment | in progress |
 | B3 | Autoscaling and observability | |
 | B4 | Load testing and cost | |
 | B5 | Integration with Project A and recommendation | |
@@ -37,3 +37,21 @@ make smoke                      # chat, streaming and tool-call checks against t
 
 Why Qwen3.5-9B with thinking off: [docs/DECISIONS.md](docs/DECISIONS.md). To rerun the 20-incident
 comparison against Project A's eval harness (its stack must be up): `scripts/compare_b1.sh`.
+
+## Kubernetes (B2)
+
+The GPU target is a scale-to-zero spot node pool on Project A's AKS cluster (`infra/azure`, never
+applied: $0). The same Helm chart runs locally on kind with vLLM's CPU image and a small stand-in model.
+
+```bash
+make deploy-check     # terraform fmt + validate, helm lint (no Azure access needed)
+make kind-up          # local kind cluster with Calico (NetworkPolicy enforced)
+kubectl create namespace selfhost && kubectl create namespace ia
+kubectl -n selfhost create secret generic vllm-api-key --from-literal=api-key="$(openssl rand -hex 24)"
+helm install vllm deploy/helm/vllm -n selfhost -f deploy/helm/vllm/values-kind.yaml
+make kind-check       # auth, NetworkPolicy, streaming
+make cold-start       # pod-to-Ready time: empty cache, cached, cached + offline
+```
+
+On AKS: `terraform apply` in `infra/azure`, then install the NVIDIA device plugin
+(`deploy/gpu/nvidia-device-plugin-values.yaml`), and then the chart with its default values.

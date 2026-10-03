@@ -1,0 +1,16 @@
+{{- if .Values.cache.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-cache
+  labels: {{- include "vllm.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep   # uninstalling the chart keeps the downloaded weights
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with .Values.cache.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests: { storage: {{ .Values.cache.size }} }
+{{- end }}

@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help install check lint typecheck test engine serve smoke
+.PHONY: help install check lint typecheck test engine serve smoke kind-up kind-down deploy-check kind-check cold-start
 
 help:  ## List targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
@@ -63,3 +63,34 @@ serve:  ## Serve a shortlisted model on 127.0.0.1:PORT (CANDIDATE=qwen|qwen4|qwe
 
 smoke:  ## Chat, streaming and tool-call checks against the running endpoint
 	uv run selfhost smoke --base-url http://127.0.0.1:$(PORT)/v1 --model $(NAME)
+
+# ---- B2: local Kubernetes test of the vLLM chart (CPU stand-in; the real target is AKS + GPU) ----
+CALICO_VERSION := v3.33.0
+CALICO_SHA256 := 2de8f47595fb9c41b3f47d7b767a1f8e72ecf84057af834738ff12689a234da5
+
+kind-up:  ## Local kind cluster with Calico (enforces NetworkPolicy), same setup as Project A's
+	kind create cluster --config deploy/kind/cluster.yaml
+	@# Pinned and checksum-verified, like Project A; the pod CIDR must match deploy/kind/cluster.yaml.
+	curl -fsSL https://raw.githubusercontent.com/projectcalico/calico/$(CALICO_VERSION)/manifests/calico.yaml \
+	  -o /tmp/calico-$(CALICO_VERSION).yaml
+	echo "$(CALICO_SHA256)  /tmp/calico-$(CALICO_VERSION).yaml" | shasum -a 256 -c -
+	sed -e 's|# - name: CALICO_IPV4POOL_CIDR|- name: CALICO_IPV4POOL_CIDR|' \
+	  -e 's|#   value: "192.168.0.0/16"|  value: "10.244.0.0/16"|' /tmp/calico-$(CALICO_VERSION).yaml \
+	  | kubectl apply -f - > /dev/null
+	kubectl -n kube-system rollout status ds/calico-node --timeout=300s
+
+kind-down:  ## Delete the local kind cluster
+	kind delete cluster --name selfhost
+
+TERRAFORM ?= $(shell command -v terraform || echo $(HOME)/.local/bin/terraform)
+
+deploy-check:  ## Terraform fmt + validate (no Azure access needed) and helm lint for both value sets
+	cd infra/azure && $(TERRAFORM) fmt -check && $(TERRAFORM) init -backend=false -input=false > /dev/null && $(TERRAFORM) validate
+	helm lint deploy/helm/vllm
+	helm lint deploy/helm/vllm -f deploy/helm/vllm/values-kind.yaml
+
+kind-check:  ## Auth, NetworkPolicy and streaming checks against the chart on kind
+	./scripts/kind_check.sh
+
+cold-start:  ## Time the vLLM pod to Ready on kind: empty cache, cached, cached + offline
+	./scripts/cold_start.sh

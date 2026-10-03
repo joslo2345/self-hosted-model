@@ -87,3 +87,33 @@ Method choices:
   hardware in B2, where memory is less tight and bf16 is the more usual serving format.
 - AWQ and GPTQ (named in the plan) are CUDA formats; MLX's group-wise 4- and 8-bit quantization is the
   equivalent on Apple GPUs. B2 can compare AWQ against FP16 on an NVIDIA GPU if credits allow.
+
+## B2 · Kubernetes deployment (2026-10-03)
+
+- **Separate Terraform stack for the GPU pool.** `infra/azure` looks up Project A's AKS cluster
+  and adds a node pool. It has its own state, so B can be applied and destroyed without touching A,
+  and Project A's code stays unchanged.
+- **GPU pool:** one `Standard_NC24ads_A100_v4` (A100 80 GB), spot, autoscaling 0–1, tainted so only vLLM lands there.
+  An A100 fits the bf16 weights that B1 found slightly more accurate, as well as FP8. T4s were
+  rejected: no bf16 or FP8 support, and 16 GB is too small for the bf16 9B. Prices and the spot
+  trade-off are B4's job. Check GPU quota in the region before applying.
+- **Drivers:** AKS-managed (`gpu_driver = "Install"`) plus the NVIDIA device plugin, not the GPU
+  Operator. AKS already handles the driver, so the operator would add components nothing uses.
+- **Model on GPU:** `Qwen/Qwen3.5-9B` bf16 weights with `--quantization fp8` at load. That's the
+  NVIDIA counterpart of B1's 8-bit choice; Qwen publishes no FP8 checkpoint of the 9B.
+- **Weight cache:** a 40 Gi `managed-csi-premium` volume, kept on uninstall, filled by an init
+  container. `cache.offline=true` after the first download removes the Hugging Face dependency at
+  startup. Caveat: Azure disks are zonal. After scale-to-zero, the new GPU node must come up in the
+  same zone to reattach the disk; otherwise the pod waits. Pin the GPU pool to that zone, or move to
+  Azure Files or baked-in weights if this turns out to be a problem.
+- **In-cluster only, with a key:** ClusterIP Service and no Ingress. vLLM's `--api-key` comes
+  from a Secret (External Secrets in Azure). A NetworkPolicy admits only Project A's agent pod.
+- **Local test on kind with a CPU stand-in:** kind on a Mac can't use the Apple GPU, and the CUDA
+  image needs NVIDIA. The kind values swap in vLLM's CPU image and a 0.8B model of the same family,
+  which tests the chart's plumbing but says nothing about GPU speed or accuracy.
+- **Open for B5:** Project A's chart doesn't pass `AGENT_LLM_API_KEY` to the agent, so it can't
+  send vLLM's key yet. Adding it is one optional `secretEnv` line in A's chart (configuration, not
+  agent code).
+- **Note:** Project A's own kind cluster (`incident-assistant`) won't start: Docker reports its
+  container storage as broken. B2 used a separate cluster (`selfhost`). Project A's
+  `make kind-up` rebuilds its cluster when it's needed.
