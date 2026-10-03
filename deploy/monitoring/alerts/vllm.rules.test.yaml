@@ -1,0 +1,98 @@
+# promtool unit tests for vllm.rules.yaml (make rules-check).
+rule_files: [vllm.rules.yaml]
+evaluation_interval: 1m
+tests:
+  - name: slow first tokens fire after 5 minutes, fast ones never
+    interval: 1m
+    input_series:
+      # 10 requests/min, all between 2.5 and 5 s
+      - series: 'vllm:time_to_first_token_seconds_bucket{namespace="selfhost", le="1"}'
+        values: '0x15'
+      - series: 'vllm:time_to_first_token_seconds_bucket{namespace="selfhost", le="2.5"}'
+        values: '0x15'
+      - series: 'vllm:time_to_first_token_seconds_bucket{namespace="selfhost", le="5"}'
+        values: '0+10x15'
+      - series: 'vllm:time_to_first_token_seconds_bucket{namespace="selfhost", le="+Inf"}'
+        values: '0+10x15'
+      # 10 requests/min, all under 1 s
+      - series: 'vllm:time_to_first_token_seconds_bucket{namespace="fast", le="1"}'
+        values: '0+10x15'
+      - series: 'vllm:time_to_first_token_seconds_bucket{namespace="fast", le="+Inf"}'
+        values: '0+10x15'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: VLLMTimeToFirstTokenHigh
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: VLLMTimeToFirstTokenHigh
+        exp_alerts:
+          - exp_labels: { severity: warning, namespace: selfhost }
+            exp_annotations:
+              summary: "vLLM p95 time to first token above 2 s in selfhost"
+              description: >-
+                p95 TTFT is 4.875s over the last 5 minutes. Check requests waiting and replica
+                count: a queue that autoscaling hasn't absorbed yet, or a scale-up blocked on a GPU
+                node (VLLMReplicaPending).
+
+  - name: KV cache alert needs 5 minutes above 90%
+    interval: 1m
+    input_series:
+      - series: 'vllm:kv_cache_usage_perc{namespace="selfhost", pod="vllm-a"}'
+        values: '0.5 0.95 0.95 0.95 0.95 0.95 0.95 0.95'
+      - series: 'vllm:kv_cache_usage_perc{namespace="selfhost", pod="vllm-b"}'
+        values: '0.95 0.95 0.5 0.95 0.95 0.5 0.95 0.95'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: VLLMKVCacheNearlyFull
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: VLLMKVCacheNearlyFull
+        exp_alerts:
+          - exp_labels: { severity: warning, namespace: selfhost, pod: vllm-a }
+            exp_annotations:
+              summary: "vLLM KV cache above 90% on vllm-a"
+              description: >-
+                KV cache usage is 95%. Expect queueing and preemptions; shorter max_tokens or
+                another replica help.
+
+  - name: a restart fires at once, other containers are ignored
+    interval: 1m
+    input_series:
+      - series: 'kube_pod_container_status_restarts_total{namespace="selfhost", pod="vllm-a", container="vllm"}'
+        values: '0 0 1 1'
+      - series: 'kube_pod_container_status_restarts_total{namespace="selfhost", pod="other", container="web"}'
+        values: '0 0 1 1'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: VLLMPodRestarting
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: VLLMPodRestarting
+        exp_alerts:
+          - exp_labels: { severity: warning, namespace: selfhost, pod: vllm-a, container: vllm }
+            exp_annotations:
+              summary: "vLLM container restarted on vllm-a"
+              description: >-
+                The vllm container restarted in the last 15 minutes (OOM, failed probe or engine
+                crash). Each restart reloads the model, and its requests fail.
+
+  - name: a replica pending for 10 minutes fires
+    interval: 1m
+    input_series:
+      - series: 'kube_pod_status_phase{namespace="selfhost", pod="vllm-b", phase="Pending"}'
+        values: '1x12'
+      - series: 'kube_pod_status_phase{namespace="selfhost", pod="vllm-c", phase="Pending"}'
+        values: '1 1 1 0 0 0 0 0 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: VLLMReplicaPending
+        exp_alerts: []
+      - eval_time: 11m
+        alertname: VLLMReplicaPending
+        exp_alerts:
+          - exp_labels: { severity: warning, namespace: selfhost, pod: vllm-b }
+            exp_annotations:
+              summary: "vLLM replica vllm-b pending for 10 minutes"
+              description: >-
+                Autoscaling asked for a replica that has no node. Users keep waiting in the queue
+                of the running replicas until a GPU node joins.

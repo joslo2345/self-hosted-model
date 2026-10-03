@@ -21,8 +21,9 @@ variable "gpu_vm_size" {
 }
 
 variable "gpu_max_nodes" {
-  type    = number
-  default = 1
+  type        = number
+  default     = 2
+  description = "One vLLM replica per node: keep equal to the chart's autoscaling.maxReplicas (B3)."
 }
 
 variable "spot" {

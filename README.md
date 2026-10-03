@@ -11,8 +11,8 @@ written and validated but never applied; cloud costs are calculated from publish
 | Package | Focus | Status |
 | --- | --- | --- |
 | B1 | Model selection and local vLLM | done: Qwen3.5-9B 8-bit, thinking off |
-| B2 | Kubernetes deployment | in progress |
-| B3 | Autoscaling and observability | |
+| B2 | Kubernetes deployment | done: AKS GPU pool (validated) + Helm chart tested on kind |
+| B3 | Autoscaling and observability | done: KEDA on queue depth (40 s to scale decision), dashboard, alerts |
 | B4 | Load testing and cost | |
 | B5 | Integration with Project A and recommendation | |
 
@@ -55,3 +55,20 @@ make cold-start       # pod-to-Ready time: empty cache, cached, cached + offline
 
 On AKS: `terraform apply` in `infra/azure`, then install the NVIDIA device plugin
 (`deploy/gpu/nvidia-device-plugin-values.yaml`), and then the chart with its default values.
+
+## Autoscaling and observability (B3)
+
+KEDA scales vLLM on requests waiting in its queue (not CPU), read from Prometheus. The serving
+dashboard and alert rules are files in `deploy/monitoring`; why queue depth: [docs/DECISIONS.md](docs/DECISIONS.md).
+
+```bash
+make monitoring-up    # Prometheus + alert rules, Grafana + serving dashboard, KEDA (on kind)
+helm upgrade vllm deploy/helm/vllm -n selfhost -f deploy/helm/vllm/values-kind.yaml
+make rules-check      # promtool: alert rules and their unit tests (Docker)
+make grafana          # dashboard on http://127.0.0.1:3100 ("Self-hosted model" folder)
+make prometheus       # Prometheus on http://127.0.0.1:9091 (alerts tab)
+make spike            # spike test: TTFT, queue, replicas and alerts over time -> eval/b3/
+```
+
+Port-forwards listen on 127.0.0.1 only. On kind, Docker Desktop's VM fits one CPU replica, so the
+second replica KEDA asks for stays Pending, which is what a pod waiting for a GPU node looks like.

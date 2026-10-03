@@ -150,3 +150,71 @@ Problems the kind test caught before any cloud run:
   longer restart the engine, and the startup probe only has to cover loading.
 - **The vision encoder was loaded for nothing.** Qwen3.5 loads it by default. The agent is text-only,
   so both value sets set `--limit-mm-per-prompt` to zero images and video.
+
+## B3 · Spike test: queue-depth autoscaling on kind (2026-10-03)
+
+Setup: the B2 chart on kind (CPU stand-in `Qwen/Qwen3.5-0.8B`, `--max-num-seqs=4`), Prometheus
+scraping every 5 s, KEDA targeting 2 waiting requests per replica, min 1 and max 2 replicas.
+`make spike` sent streaming requests of 64 tokens, open-loop and evenly spaced: 60 s at 0.05 req/s,
+a 180 s spike at 0.4 req/s, then 120 s at 0.05 req/s. One replica serves about 0.22 req/s, so the
+spike was about twice its capacity. Docker Desktop's VM has room for one vLLM pod only, so the
+replica KEDA added stayed Pending, as it would while AKS looks for a spot GPU node. Full output:
+`eval/b3/spike.md` and `.json`.
+
+| Milestone, from the start of the spike | Time |
+| --- | --- |
+| Requests waiting above target (2) | +15 s |
+| KEDA asks for a second replica (HPA desired = 2) | **+40 s** |
+| Second pod created | +40 s (same sample) |
+| Second pod Ready | never (no memory left on the node: Pending for 8 min) |
+| Queue back to zero | +411 s |
+| Scaled back to 1 replica | +535 s (queue empty + 120 s stabilization window) |
+
+**Scale-up reaction: 40 s from spike to scale decision**, of which 25 s from crossing the target.
+That gap is the 30 s queue average in the KEDA query, plus the 5 s scrape and the HPA's 15 s sync.
+It's deliberate (one burst shouldn't add a GPU node), and small next to a GPU node's start time.
+
+**What users saw while the new replica wasn't ready** (TTFT of requests sent in each window):
+
+| Window | TTFT p50 | TTFT p95 | Max waiting |
+| --- | --- | --- | --- |
+| Before the spike | 3.2 s | 3.3 s | 0 |
+| Spike, first 30 s | 13 s | 24 s | 4 |
+| Spike, after 90 s | 112 s | 127 s | 24 |
+| Spike, last 30 s | 185 s | 197 s | 36 |
+| After the spike (load back to baseline) | 129–172 s | up to 205 s | 37 → 0 over 4 min |
+
+- **No request failed (0 of 81), but they waited.** vLLM's queue has no limit: a request waits
+  until a slot frees. TTFT grew by about 1 s for every second of the spike, and reached 205 s. That's
+  close to Project A's 300 s limit per model call. A slightly longer spike would have turned
+  waiting into agent timeouts.
+- The queue took 4 minutes to drain after the spike ended. A replica that arrives late still helps
+  with the backlog, as long as it arrives before the queue empties.
+- **Alerts:** `VLLMTimeToFirstTokenHigh` fired at +254 s. On the CPU stand-in, TTFT was already
+  above the 2 s GPU target before the spike, so the alert started pending then, and its timing says
+  nothing about the GPU. `VLLMReplicaPending` didn't fire: the pod was Pending for 8 min, under the
+  10 min threshold. All four rules are covered by promtool unit tests (`make rules-check`).
+- **Server-side TTFT histograms overstate long waits:** the dashboard's p95 read 616 s, against a
+  205 s maximum measured by the client. vLLM's top histogram buckets are wide, and
+  `histogram_quantile` interpolates inside them. Use the client numbers for long tails; the
+  histograms are fine at GPU-scale latencies.
+
+**Estimated scale-up on AKS** (only the KEDA part is measured):
+
+| Step | Time | Source |
+| --- | --- | --- |
+| Spike to scale decision | ~40 s | measured above |
+| Spot GPU node joins the cluster | several minutes, or never if there is no spot capacity | not measured ($0) |
+| vLLM CUDA image pull on a new node | 1–3 min (multi-GB image) | estimate |
+| Weights from the shared cache, 19 GB at ~110 MiB/s | ~3 min | Azure's published file share limits |
+| Model load + engine start | 31 s on kind's CPU stand-in (B2, cached + offline) | not measured on an A100 |
+
+That's on the order of 5–10 minutes. At twice the capacity of one replica, the queue grows by
+about one request every 5 s, and every request in it waits longer. So autoscaling covers sustained
+growth, not sudden spikes. B4 and B5 should consider: enough minimum replicas for the normal peak;
+a limit on vLLM's queue or the agent's concurrency, so overload fails fast instead of timing out at
+300 s; and measuring real node-to-first-token time if cloud credits become available.
+
+**Monitoring footprint on kind:** with the default Prometheus scrape jobs, the 7.75 GB VM swapped and
+vLLM's engine hung on its first request until it restarted. With Prometheus limited to the jobs
+B3 uses, the steady state is vLLM 5.6 GiB, Prometheus 95 MiB, Grafana 91 MiB, KEDA ~130 MiB.

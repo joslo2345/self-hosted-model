@@ -1,0 +1,51 @@
+# B3: vLLM serving alerts. Loaded into Prometheus from a ConfigMap (make monitoring-up) and unit
+# tested with promtool (make rules-check, tests in vllm.rules.test.yaml). Targets are for the GPU
+# deployment; on kind's CPU stand-in the latency alert fires under any real load.
+groups:
+  - name: vllm-serving
+    rules:
+      - alert: VLLMTimeToFirstTokenHigh
+        # Includes time waiting in the queue, so it is what an agent step actually feels.
+        expr: |
+          histogram_quantile(0.95,
+            sum by (namespace, le) (rate(vllm:time_to_first_token_seconds_bucket[5m]))) > 2
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "vLLM p95 time to first token above 2 s in {{ $labels.namespace }}"
+          description: >-
+            p95 TTFT is {{ $value | humanizeDuration }} over the last 5 minutes. Check requests
+            waiting and replica count: a queue that autoscaling hasn't absorbed yet, or a scale-up
+            blocked on a GPU node (VLLMReplicaPending).
+
+      - alert: VLLMKVCacheNearlyFull
+        # vLLM fills the KV cache by design under load; sustained >90% means new requests queue
+        # or running ones get preempted.
+        expr: max by (namespace, pod) (vllm:kv_cache_usage_perc) > 0.9
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "vLLM KV cache above 90% on {{ $labels.pod }}"
+          description: >-
+            KV cache usage is {{ $value | humanizePercentage }}. Expect queueing and preemptions;
+            shorter max_tokens or another replica help.
+
+      - alert: VLLMPodRestarting
+        expr: increase(kube_pod_container_status_restarts_total{container="vllm"}[15m]) > 0
+        labels: { severity: warning }
+        annotations:
+          summary: "vLLM container restarted on {{ $labels.pod }}"
+          description: >-
+            The vllm container restarted in the last 15 minutes (OOM, failed probe or engine
+            crash). Each restart reloads the model, and its requests fail.
+
+      - alert: VLLMReplicaPending
+        # A replica KEDA asked for that can't be scheduled: on AKS, usually no spot GPU capacity.
+        expr: max by (namespace, pod) (kube_pod_status_phase{phase="Pending", pod=~"vllm-.*"}) > 0
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "vLLM replica {{ $labels.pod }} pending for 10 minutes"
+          description: >-
+            Autoscaling asked for a replica that has no node. Users keep waiting in the queue of
+            the running replicas until a GPU node joins.
