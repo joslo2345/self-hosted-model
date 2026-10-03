@@ -1,0 +1,22 @@
+{
+  "retrieved": "2026-10-03",
+  "gpu": {
+    "source": "Azure Retail Prices API (prices.azure.com), Linux consumption, westus2 (Project A's region)",
+    "vm": "Standard_NC24ads_A100_v4",
+    "on_demand_per_hour": 3.673,
+    "spot_per_hour": 0.67877
+  },
+  "storage": {
+    "source": "Azure Retail Prices API, Premium Files LRS provisioned, westus2",
+    "weight_cache_gib": 100,
+    "per_gib_month": 0.16
+  },
+  "hosted": {
+    "source": "Anthropic first-party API prices per million tokens (claude-api reference, cached 2026-09-25); cache write is 1.25x input for the 5-minute TTL",
+    "models": {
+      "claude-opus-5-5": { "input": 4.0, "output": 20.0, "cache_write": 5.0, "cache_read": 0.20 },
+      "claude-sonnet-5-5": { "input": 2.0, "output": 10.0, "cache_write": 2.5, "cache_read": 0.20 },
+      "claude-haiku-4-5": { "input": 1.0, "output": 5.0, "cache_write": 1.25, "cache_read": 0.10 }
+    }
+  }
+}

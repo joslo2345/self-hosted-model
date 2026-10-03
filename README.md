@@ -13,7 +13,7 @@ written and validated but never applied; cloud costs are calculated from publish
 | B1 | Model selection and local vLLM | done: Qwen3.5-9B 8-bit, thinking off |
 | B2 | Kubernetes deployment | done: AKS GPU pool (validated) + Helm chart tested on kind |
 | B3 | Autoscaling and observability | done: KEDA on queue depth (40 s to scale decision), dashboard, alerts |
-| B4 | Load testing and cost | |
+| B4 | Load testing and cost | done: replayed agent traces, cost per 1,000 incidents, break-even |
 | B5 | Integration with Project A and recommendation | |
 
 Design choices: [docs/DECISIONS.md](docs/DECISIONS.md). Numbers: [docs/RESULTS.md](docs/RESULTS.md).
@@ -72,3 +72,16 @@ make spike            # spike test: TTFT, queue, replicas and alerts over time -
 
 Port-forwards listen on 127.0.0.1 only. On kind, Docker Desktop's VM fits one CPU replica, so the
 second replica KEDA asks for stays Pending, which is what a pod waiting for a GPU node looks like.
+
+## Load test and cost (B4)
+
+The load test replays Project A's real agent conversations (the 20 B1 runs, exported from A's trace
+tables) at increasing concurrency against the local model, then a cost model compares an A100 on
+Azure with hosted Claude models. Results: [docs/RESULTS.md](docs/RESULTS.md).
+
+```bash
+make bench    # fresh vLLM per config: baseline (1-64 agents), no prefix cache, 8k prefill chunks (~1 h)
+make cost     # cost per incident, break-even volume, charts -> eval/b4/cost.md, docs/img/
+```
+
+To re-export the traces (needs Project A's database running), see `scripts/export_traces.py`.
