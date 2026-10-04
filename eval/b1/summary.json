@@ -1,0 +1,123 @@
+{
+  "gemma-nothink": {
+    "valid": 20,
+    "root": 20,
+    "action": 16,
+    "missed": 0,
+    "runbook": 16,
+    "p50": 121,
+    "p95": 262,
+    "tok": 45828,
+    "errs": {},
+    "citation_support": 0.958
+  },
+  "gemma-think": {
+    "valid": 17,
+    "root": 17,
+    "action": 15,
+    "missed": 1,
+    "runbook": 13,
+    "p50": 198,
+    "p95": 351,
+    "tok": 30686,
+    "errs": {
+      "invalid_output": 2,
+      "error": 1
+    },
+    "citation_support": 0.902
+  },
+  "granite-nothink": {
+    "valid": 20,
+    "root": 20,
+    "action": 17,
+    "missed": 3,
+    "runbook": 17,
+    "p50": 117,
+    "p95": 152,
+    "tok": 43804,
+    "errs": {},
+    "citation_support": 0.957
+  },
+  "granite-think": {
+    "valid": 13,
+    "root": 13,
+    "action": 13,
+    "missed": 0,
+    "runbook": 12,
+    "p50": 386,
+    "p95": 683,
+    "tok": 25312,
+    "errs": {
+      "error": 7
+    },
+    "citation_support": 0.949
+  },
+  "qwen-nothink": {
+    "valid": 20,
+    "root": 20,
+    "action": 17,
+    "missed": 1,
+    "runbook": 18,
+    "p50": 147,
+    "p95": 222,
+    "tok": 40084,
+    "steps": 4.3,
+    "errs": {},
+    "citation_support": 0.988
+  },
+  "qwen-think": {
+    "valid": 18,
+    "root": 18,
+    "action": 16,
+    "missed": 0,
+    "runbook": 15,
+    "p50": 214,
+    "p95": 382,
+    "tok": 27062,
+    "errs": {
+      "error": 2
+    },
+    "citation_support": 0.931
+  },
+  "baseline": {
+    "valid": 20,
+    "root": 18,
+    "action": 18,
+    "missed": 1,
+    "runbook": 16,
+    "p50": 122,
+    "p95": 213,
+    "tok": 27802,
+    "errs": {},
+    "citation_support": 0.925,
+    "source": "project-a eval/reports/a6/test/final-r3.json, first 20 cases"
+  },
+  "qwen4-nothink": {
+    "valid": 18,
+    "root": 17,
+    "action": 14,
+    "missed": 0,
+    "runbook": 15,
+    "p50": 168,
+    "p95": 278,
+    "tok": 110566,
+    "steps": 9.2,
+    "errs": {
+      "error": 2
+    },
+    "citation_support": 0.968
+  },
+  "qwenbf16-nothink": {
+    "valid": 20,
+    "root": 20,
+    "action": 18,
+    "missed": 0,
+    "runbook": 18,
+    "p50": 214,
+    "p95": 324,
+    "tok": 38935,
+    "steps": 4.3,
+    "errs": {},
+    "citation_support": 0.958
+  }
+}
