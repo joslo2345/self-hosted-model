@@ -1,0 +1,36 @@
+# Local test on kind (make kind-up): the same chart on vLLM's CPU image with a small model of the
+# same family, so probes, the weight cache, auth and NetworkPolicy are exercised without a GPU.
+# Speed and accuracy here say nothing about the GPU deployment.
+image:
+  repository: vllm/vllm-openai-cpu
+  tag: v0.30.0
+
+model:
+  name: Qwen/Qwen3.5-0.8B
+  revision: 2fc06364715b967f1860aea9cf38778875588b17
+  servedName: qwen3.5-9b      # same name as on GPU, so clients don't change between environments
+  maxModelLen: 4096
+  args:
+    - --enforce-eager      # CPU: skip torch.compile warm-up (minutes and several GB on a laptop)
+    - --max-num-seqs=4
+    - --kv-cache-memory-bytes=402653184   # 384 MiB: Docker Desktop's VM has ~8 GB for everything
+    - '--limit-mm-per-prompt={"image": 0, "video": 0}'   # text-only agent: skip the vision encoder
+    - --enable-auto-tool-choice
+    - --tool-call-parser=qwen3_coder
+    - --reasoning-parser=qwen3
+    - '--default-chat-template-kwargs={"enable_thinking": false}'
+
+extraEnv: []
+
+gpu:
+  enabled: false
+
+resources:
+  requests: { cpu: "2", memory: 5Gi }
+  limits: { memory: 7Gi }   # the CPU worker holds ~4 GiB for a 0.8B model; startup peaks above 6
+
+cache:
+  size: 5Gi
+  storageClass: standard      # kind's local-path provisioner
+
+shmSize: 1Gi

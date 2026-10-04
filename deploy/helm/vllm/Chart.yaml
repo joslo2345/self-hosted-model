@@ -1,0 +1,6 @@
+apiVersion: v2
+name: vllm
+description: vLLM serving the B1 model behind an in-cluster, API-key-protected OpenAI-compatible endpoint
+type: application
+version: 0.1.0
+appVersion: "0.30.0"

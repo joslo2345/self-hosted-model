@@ -1,0 +1,12 @@
+# NVIDIA device plugin on the AKS GPU pool (B2). AKS installs the driver (gpu_driver = "Install" in
+# infra/azure); the plugin advertises nvidia.com/gpu so the vLLM pod can request it.
+#   helm repo add nvdp https://nvidia.github.io/k8s-device-plugin
+#   helm upgrade --install nvdp nvdp/nvidia-device-plugin --version 0.20.1 \
+#     -n kube-system -f deploy/gpu/nvidia-device-plugin-values.yaml
+# Chosen over the full GPU Operator: AKS already manages the driver, so the operator would only
+# add the device plugin plus components this cluster doesn't need.
+nodeSelector:
+  workload: llm
+tolerations:
+  - { key: nvidia.com/gpu, operator: Exists, effect: NoSchedule }
+  - { key: kubernetes.azure.com/scalesetpriority, operator: Equal, value: spot, effect: NoSchedule }

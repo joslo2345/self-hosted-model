@@ -15,3 +15,8 @@ __pycache__/
 # B1 comparison logs (reports and summary.json are committed)
 /eval/b1/logs/
 /eval/b1/progress.log
+# Terraform: provider downloads and state never go in Git (state can hold secrets)
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars

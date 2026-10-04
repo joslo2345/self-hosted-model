@@ -1,0 +1,5 @@
+vLLM serves {{ .Values.model.name }} as "{{ .Values.model.servedName }}" at
+  http://{{ .Release.Name }}.{{ .Release.Namespace }}.svc:{{ .Values.service.port }}/v1
+It accepts only requests with the API key from Secret {{ .Values.auth.existingSecret }}, and only from the
+pods allowed in networkPolicy.from. The first start downloads the weights; watch with
+  kubectl -n {{ .Release.Namespace }} get pod -l app.kubernetes.io/name=vllm -w

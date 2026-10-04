@@ -1,0 +1,78 @@
+# vLLM Helm values. Defaults are the GPU deployment (AKS GPU pool from infra/azure);
+# values-kind.yaml overrides them for the CPU test on a laptop.
+
+image:
+  repository: vllm/vllm-openai
+  tag: v0.30.0              # same engine version as B1
+  pullPolicy: IfNotPresent
+
+# The B1 choice: Qwen3.5-9B, 8-bit, thinking off. On NVIDIA GPUs the 8-bit form is FP8, quantized
+# from the bf16 weights at load time (Qwen publishes no FP8 checkpoint of the 9B).
+model:
+  name: Qwen/Qwen3.5-9B
+  revision: c202236235762e1c871ad0ccb60c8ee5ba337b9a
+  servedName: qwen3.5-9b    # what clients send as `model` (Project A: model.name)
+  maxModelLen: 32768
+  args:
+    - --quantization=fp8
+    - --gpu-memory-utilization=0.90
+    - '--limit-mm-per-prompt={"image": 0, "video": 0}'   # text-only agent: skip the vision encoder
+    - --enable-auto-tool-choice
+    - --tool-call-parser=qwen3_coder
+    - --reasoning-parser=qwen3
+    - '--default-chat-template-kwargs={"enable_thinking": false}'
+
+# Clients must send `Authorization: Bearer <key>`. The key lives in an existing Secret (from External
+# Secrets / Key Vault in Azure, or `kubectl create secret` locally). Never put the value here.
+auth:
+  existingSecret: vllm-api-key
+  secretKey: api-key
+
+# Extra container environment (e.g. CPU-backend settings in values-kind.yaml).
+extraEnv: []
+
+gpu:
+  enabled: true
+  count: 1
+  nodeSelector: { workload: llm }      # the GPU pool's label (infra/azure)
+  tolerations:
+    - { key: nvidia.com/gpu, operator: Exists, effect: NoSchedule }
+    - { key: kubernetes.azure.com/scalesetpriority, operator: Equal, value: spot, effect: NoSchedule }
+
+resources:
+  requests: { cpu: "4", memory: 32Gi }
+  limits: { memory: 64Gi }
+
+# Weight cache: Hugging Face downloads land on a persistent volume, so a restarted pod (or a new
+# node after scale-to-zero, once the disk reattaches) loads from disk instead of downloading again.
+cache:
+  enabled: true
+  size: 40Gi                 # bf16 weights are ~19 GB
+  storageClass: managed-csi-premium
+  # true after the first download: start without contacting Hugging Face at all.
+  offline: false
+  # Download weights in an init container before vLLM starts (see templates/deployment.yaml).
+  prefetch: true
+  prefetchResources:
+    requests: { cpu: 500m, memory: 512Mi }
+    limits: { memory: 2Gi }
+
+shmSize: 8Gi                 # PyTorch shared memory for the engine processes
+
+# The model can take minutes to download and load. The startup probe allows up to
+# failureThreshold x periodSeconds before Kubernetes restarts the pod; readiness gates traffic.
+probes:
+  startup: { periodSeconds: 10, failureThreshold: 180 }   # 30 min: first download on a fresh volume
+  readiness: { periodSeconds: 10, failureThreshold: 3 }
+  liveness: { periodSeconds: 30, failureThreshold: 3 }
+
+service:
+  port: 8000
+
+# Only these pods may connect (Project A's agent by default). Everything else in the cluster is
+# refused, and there is no Ingress: the endpoint is never exposed outside the cluster.
+networkPolicy:
+  enabled: true
+  from:
+    - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: ia } }
+      podSelector: { matchLabels: { app.kubernetes.io/name: agent } }

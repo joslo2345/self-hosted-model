@@ -1,0 +1,12 @@
+# Local Kubernetes for testing the vLLM chart (B2): `make kind-up`.
+# Same networking as Project A's kind cluster: Calico, so NetworkPolicies are enforced, and a pod
+# CIDR that doesn't swallow Docker Desktop's host address. No port mappings: the endpoint is
+# in-cluster only.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: selfhost
+networking:
+  disableDefaultCNI: true
+  podSubnet: 10.244.0.0/16
+nodes:
+  - role: control-plane
