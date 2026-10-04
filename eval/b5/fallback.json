@@ -1,0 +1,220 @@
+{
+  "meta": {
+    "set": "test",
+    "label": "fallback",
+    "commit": "a419152",
+    "dirty": true,
+    "provider": "openai_compat+fallback:openai_compat",
+    "model": "qwen3.5-9b",
+    "prompt_sha": "8c3be535ecec",
+    "judge": null,
+    "started_at": "2026-10-04T01:01:20+00:00",
+    "finished_at": "2026-10-04T01:13:07+00:00",
+    "composition": {
+      "cases": 4,
+      "by_type": {
+        "ecc_degradation": 1,
+        "gpu_off_bus": 1,
+        "pcie_degradation": 1,
+        "thermal_runaway": 1
+      },
+      "decoys": 0,
+      "bmc_dropped": 3
+    }
+  },
+  "summary": {
+    "cases": 4,
+    "succeeded": 4,
+    "root_cause_accuracy": {
+      "n": 4,
+      "of": 4,
+      "rate": 1.0
+    },
+    "root_cause_accuracy_bmc_dropped": {
+      "n": 3,
+      "of": 3,
+      "rate": 1.0
+    },
+    "action_correct": {
+      "n": 4,
+      "of": 4,
+      "rate": 1.0
+    },
+    "unsafe_action_rate": {
+      "n": 0,
+      "of": 0,
+      "rate": null
+    },
+    "missed_action_rate": {
+      "n": 0,
+      "of": 4,
+      "rate": 0.0
+    },
+    "runbook_cited": {
+      "n": 4,
+      "of": 4,
+      "rate": 1.0
+    },
+    "citation_support": null,
+    "latency_s_p50": 120.7,
+    "latency_s_p95": 377.7,
+    "tokens_per_case": 23576,
+    "cost_usd_per_case": 0.0,
+    "tool_errors": 2,
+    "text_tool_calls": 2,
+    "by_type": {
+      "ecc_degradation": {
+        "cases": 1,
+        "root_cause": 1,
+        "action": 1
+      },
+      "gpu_off_bus": {
+        "cases": 1,
+        "root_cause": 1,
+        "action": 1
+      },
+      "pcie_degradation": {
+        "cases": 1,
+        "root_cause": 1,
+        "action": 1
+      },
+      "thermal_runaway": {
+        "cases": 1,
+        "root_cause": 1,
+        "action": 1
+      }
+    }
+  },
+  "cases": [
+    {
+      "case_id": "a6test/f001-pcie_degradation",
+      "incident_id": "1b28e586-70e0-5b3e-ad6e-de17162d30e3",
+      "truth": "pcie_degradation",
+      "is_fault": true,
+      "bmc_dropped": true,
+      "run_id": "7e55d82c-0bae-4439-96a7-883e32e39d63",
+      "status": "succeeded",
+      "root_cause": "pcie_degradation",
+      "confidence": 0.9,
+      "action": "drain_node",
+      "cited_chunks": [
+        "rb-006-pcie-degradation#remediation"
+      ],
+      "summary": "GPU 1 on a6test-a100-node-02 shows a rapid increase in PCIe replay counters (from 0 to 2255+ over 48 minutes) while all other GPUs on the node show 0 replay counters. Power limit remains at default 400W, temperatures are normal (60-67\u00b0C), and no thermal throttling or other error counters (ECC, NVLink CRC) are elevated. This matches the symptoms of PCIe degradation as defined in the runbook, with no evidence of thermal issues or power capping.",
+      "rationale": "Per runbook remediation (rb-006-pcie-degradation#remediation), PCIe replays without errors require scheduling a drain for reseating the GPU/riser/cable. This is a Sev3 incident with no immediate risk of GPU failure but high likelihood of future failure if unresolved.",
+      "steps": 3,
+      "tool_calls": 4,
+      "tool_errors": 0,
+      "text_tool_calls": 1,
+      "input_tokens": 23312,
+      "output_tokens": 1478,
+      "cost_usd": 0.0,
+      "latency_s": 377.719,
+      "root_cause_correct": true,
+      "action_correct": true,
+      "unsafe_action": false,
+      "missed_action": false,
+      "runbook_cited": true,
+      "citation_verdicts": [],
+      "citation_support": null
+    },
+    {
+      "case_id": "a6test/f022-thermal_runaway",
+      "incident_id": "c88ff0e5-e51e-5673-8105-ac0e60c38321",
+      "truth": "thermal_runaway",
+      "is_fault": true,
+      "bmc_dropped": true,
+      "run_id": "493f1e43-6820-48cb-bb98-3e17faff9595",
+      "status": "succeeded",
+      "root_cause": "thermal_runaway",
+      "confidence": 0.9,
+      "action": "drain_node",
+      "cited_chunks": [
+        "rb-001-thermal-runaway#symptoms",
+        "rb-001-thermal-runaway#diagnosis"
+      ],
+      "summary": "GPU 4-6 on a6test-a100-node-03 showed thermal_residual (12-13\u00b0C above predicted temp) and thermal_throttle (74-78 throttled samples), while neighboring GPUs (0-3,7) remained at normal temps (63-65\u00b0C) with no power capping (400W limit) or error counters. BMC logs were empty, but telemetry matches thermal_runaway symptoms: localized GPU overheating without facility-wide issues (GPU 7 at 31\u00b0C).",
+      "rationale": "Thermal throttling on multiple GPUs (4-6) with no fan sensor logs suggests localized cooling failure. Per runbook, Sev2 thermal runaway requires draining the node to prevent job slowdowns. No evidence of facility cooling issues (GPU 7 normal), so node-specific action is needed.",
+      "steps": 4,
+      "tool_calls": 3,
+      "tool_errors": 0,
+      "text_tool_calls": 1,
+      "input_tokens": 16052,
+      "output_tokens": 4646,
+      "cost_usd": 0.0,
+      "latency_s": 120.842,
+      "root_cause_correct": true,
+      "action_correct": true,
+      "unsafe_action": false,
+      "missed_action": false,
+      "runbook_cited": true,
+      "citation_verdicts": [],
+      "citation_support": null
+    },
+    {
+      "case_id": "a6test/f006-ecc_degradation",
+      "incident_id": "122ed847-288f-5a2c-85f5-e7765c968a83",
+      "truth": "ecc_degradation",
+      "is_fault": true,
+      "bmc_dropped": true,
+      "run_id": "2cc021d7-3c2c-49e4-be44-f349445fb972",
+      "status": "succeeded",
+      "root_cause": "ecc_degradation",
+      "confidence": 0.95,
+      "action": "replace_part",
+      "cited_chunks": [
+        "rb-002-ecc-degradation#diagnosis",
+        "rb-002-ecc-degradation#escalation"
+      ],
+      "summary": "GPU 7 on a6test-h100-node-01 shows accelerating correctable ECC errors (SBE) exceeding 50 per 30 minutes (evidence ev-87 to ev-89), followed by an uncorrectable error (DBE) with XID 48 (ev-139) and confirmed DBE counter (ev-140). Thermal telemetry shows high temperatures (69\u00b0C max) during peak utilization, but power limit remains at default (700W), ruling out power fault or thermal runaway. PCIe/NVLink counters remain stable (pcie_replay_total=2), confirming ECC degradation as the root cause. Runbook diagnosis (rb-002-ecc-degradation#diagnosis) confirms rising SBE rate and DBE as RMA signal.",
+      "rationale": "ECC degradation with DBE (XID 48) and repeated SBE bursts exceeding thresholds requires GPU replacement per runbook escalation (rb-002-ecc-degradation#escalation).",
+      "steps": 4,
+      "tool_calls": 3,
+      "tool_errors": 1,
+      "text_tool_calls": 0,
+      "input_tokens": 28202,
+      "output_tokens": 3795,
+      "cost_usd": 0.0,
+      "latency_s": 120.63,
+      "root_cause_correct": true,
+      "action_correct": true,
+      "unsafe_action": false,
+      "missed_action": false,
+      "runbook_cited": true,
+      "citation_verdicts": [],
+      "citation_support": null
+    },
+    {
+      "case_id": "a6test/f014-gpu_off_bus",
+      "incident_id": "0edd7fd5-7dad-5e58-9cf3-c19cb25f2ce0",
+      "truth": "gpu_off_bus",
+      "is_fault": true,
+      "bmc_dropped": false,
+      "run_id": "620aff28-d3d2-43f7-b279-f7db5a65346d",
+      "status": "succeeded",
+      "root_cause": "gpu_off_bus",
+      "confidence": 0.95,
+      "action": "drain_node",
+      "cited_chunks": [
+        "rb-004-gpu-off-bus#remediation"
+      ],
+      "summary": "GPU 1 fell off the bus (XID 79) with BMC PCIe fatal error. Telemetry shows GPU 1 stopped reporting at 2026-09-30T04:45:00Z while neighbours remained active. No thermal, power, or error counter anomalies. Matches runbook symptoms for GPU off bus (rb-004-gpu-off-bus#symptoms).",
+      "rationale": "GPU fell off bus requires node drain per runbook remediation (rb-004-gpu-off-bus#remediation). GPU cannot recover while OS is running; reboot needed after drain.",
+      "steps": 4,
+      "tool_calls": 3,
+      "tool_errors": 1,
+      "text_tool_calls": 0,
+      "input_tokens": 13429,
+      "output_tokens": 3392,
+      "cost_usd": 0.0,
+      "latency_s": 87.145,
+      "root_cause_correct": true,
+      "action_correct": true,
+      "unsafe_action": false,
+      "missed_action": false,
+      "runbook_cited": true,
+      "citation_verdicts": [],
+      "citation_support": null
+    }
+  ]
+}

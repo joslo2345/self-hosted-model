@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 .PHONY: help install check lint typecheck test engine serve smoke kind-up kind-down deploy-check kind-check cold-start \
-	monitoring-up rules-check grafana prometheus spike bench cost
+	monitoring-up rules-check grafana prometheus spike bench cost b5-eval b5-fallback b5-report
 
 help:  ## List targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
@@ -143,3 +143,13 @@ bench:  ## Load test: baseline + 2 tuning configs, 1-64 agents replaying real tr
 
 cost:  ## Cost per incident, break-even volume and charts from the bench results (eval/b4/cost.md)
 	uv run python scripts/b4_report.py
+
+# ---- B5: Project A on the self-hosted model ----
+b5-eval:  ## Project A's full A6 eval (25 incidents) on the self-hosted model, config only (~1 h)
+	./scripts/b5_eval.sh
+
+b5-fallback:  ## Kill vLLM mid-run; the agent must finish on the fallback model
+	./scripts/b5_fallback_test.sh
+
+b5-report:  ## Side-by-side results, hybrid routing analysis, cost by volume (eval/b5/summary.md)
+	uv run python scripts/b5_report.py

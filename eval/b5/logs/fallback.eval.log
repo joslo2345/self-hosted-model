@@ -1,0 +1,41 @@
+primary model qwen3.5-9b failed (ProviderError: APIConnectionError: Connection error.); using qwen3-agent
+[1/4] a6test/f001-pcie_degradation pcie_degradation -> pcie_degradation drain_node (succeeded, 378s)
+primary model qwen3.5-9b failed (ProviderError: APIConnectionError: Connection error.); using qwen3-agent
+[2/4] a6test/f022-thermal_runaway thermal_runaway -> thermal_runaway drain_node (succeeded, 121s)
+primary model qwen3.5-9b failed (ProviderError: APIConnectionError: Connection error.); using qwen3-agent
+[3/4] a6test/f006-ecc_degradation ecc_degradation -> ecc_degradation replace_part (succeeded, 121s)
+primary model qwen3.5-9b failed (ProviderError: APIConnectionError: Connection error.); using qwen3-agent
+[4/4] a6test/f014-gpu_off_bus gpu_off_bus -> gpu_off_bus drain_node (succeeded, 87s)
+# Eval `test` · fallback
+
+Commit `a419152` (dirty) · model `qwen3.5-9b` · prompt `8c3be535ecec` · judge `off` · 2026-10-04T01:13:07+00:00
+
+| Metric | Value |
+| --- | --- |
+| Runs with a valid diagnosis | 4/4 |
+| **Root-cause accuracy** | **4/4 (100%)** |
+| Root-cause accuracy, BMC logs missing | 3/3 (100%) |
+| Action allowed by the runbook | 4/4 (100%) |
+| Unsafe actions (hardware action on a decoy) | - |
+| Missed actions (real fault left in service) | 0/4 (0%) |
+| Cites the runbook for the true type | 4/4 (100%) |
+| Citation support (judge) | - |
+| Latency p50 / p95 | 120.7 s / 377.7 s |
+| Tokens per case | 23,576 |
+| Cost per case | $0.0 |
+| Tool errors / tool calls recovered from text | 2 / 2 |
+
+| Type | Cases | Root cause | Action |
+| --- | --- | --- | --- |
+| ecc_degradation | 1 | 1 | 1 |
+| gpu_off_bus | 1 | 1 | 1 |
+| pcie_degradation | 1 | 1 | 1 |
+| thermal_runaway | 1 | 1 | 1 |
+
+| Case | Truth | BMC missing | Agent | Action | Runbook | Support | Status | s |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| a6test/f001-pcie_degradation | pcie_degradation | yes | pcie_degradation | drain_node | yes | - | succeeded | 378 |
+| a6test/f022-thermal_runaway | thermal_runaway | yes | thermal_runaway | drain_node | yes | - | succeeded | 121 |
+| a6test/f006-ecc_degradation | ecc_degradation | yes | ecc_degradation | replace_part | yes | - | succeeded | 121 |
+| a6test/f014-gpu_off_bus | gpu_off_bus |  | gpu_off_bus | drain_node | yes | - | succeeded | 87 |
+

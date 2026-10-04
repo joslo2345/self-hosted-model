@@ -14,7 +14,7 @@ written and validated but never applied; cloud costs are calculated from publish
 | B2 | Kubernetes deployment | done: AKS GPU pool (validated) + Helm chart tested on kind |
 | B3 | Autoscaling and observability | done: KEDA on queue depth (40 s to scale decision), dashboard, alerts |
 | B4 | Load testing and cost | done: replayed agent traces, cost per 1,000 incidents, break-even |
-| B5 | Integration with Project A and recommendation | |
+| B5 | Integration with Project A and recommendation | done: config-only switch, fallback tested, [recommendation](docs/RECOMMENDATION.md) |
 
 Design choices: [docs/DECISIONS.md](docs/DECISIONS.md). Numbers: [docs/RESULTS.md](docs/RESULTS.md).
 
@@ -85,3 +85,15 @@ make cost     # cost per incident, break-even volume, charts -> eval/b4/cost.md,
 ```
 
 To re-export the traces (needs Project A's database running), see `scripts/export_traces.py`.
+
+## Integration with Project A (B5)
+
+Project A runs on the self-hosted model through configuration only: environment variables locally,
+`deploy/helm/values-selfhosted.yaml` (in Project A) on Kubernetes, with the hosted API as automatic
+fallback. Recommendation memo: [docs/RECOMMENDATION.md](docs/RECOMMENDATION.md).
+
+```bash
+make b5-eval       # Project A's full A6 eval on the self-hosted model (~1 h; Project A stack up)
+make b5-fallback   # kill vLLM mid-run; the agent must finish on the fallback model
+make b5-report     # side-by-side results, hybrid analysis, cost by volume -> eval/b5/summary.md
+```

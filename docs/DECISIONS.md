@@ -203,3 +203,35 @@ Method choices:
   2,048-token prefill chunks (8,192 changed nothing measurable on vllm-metal). Size self-hosting by
   volume: below ~170 incidents/day (spot) or ~900/day (on demand), the hosted API costs less than
   an always-on A100, before counting operations. B5 makes the recommendation with quality included.
+
+## B5 · Integration with Project A (2026-10-03)
+
+- **Backend switch is configuration only.** The full A6 eval ran on Project A's unchanged `main`
+  with `AGENT_PROVIDER=openai_compat`, `AGENT_BASE_URL` and `AGENT_MODEL` pointing at vLLM. On
+  Kubernetes, `deploy/helm/values-selfhosted.yaml` (Project A, branch `b5-fallback`) does the same
+  through Helm values; removing that file from the command switches back. The chart now passes
+  `AGENT_LLM_API_KEY` (vLLM's key, the B2 gap) and can sync optional keys from Key Vault.
+- **Fallback is new code in Project A, enabled by configuration** (`AGENT_FALLBACK_PROVIDER` and
+  friends). Kubernetes and B3's autoscaling can't help in the minutes a GPU node takes to come
+  back, so the agent itself moves a conversation to the hosted API when a call to the
+  self-hosted model fails or takes longer than 120 s:
+  - It **continues** the conversation instead of restarting the incident: the hosted model gets
+    the same prompt and every turn and tool result so far. Restarting would repeat tool calls,
+    including approval requests for `drain_node`.
+  - After a failure, new incidents skip the self-hosted model for 60 s (cooldown), so they don't
+    each wait out the timeout; afterwards it's tried again.
+  - Each turn is priced by the model that produced it, so run cost stays right.
+  - Rejected: retrying the primary (a dead pod stays dead for minutes); a proxy such as LiteLLM in
+    front of both (another service to run, and it can't replay a conversation across APIs that
+    keep different transcript formats); failing over the whole run (repeats tool calls).
+- **$0 for B5 too (user decision, 2026-10-03):** no paid hosted runs. So the hosted model's
+  quality isn't measured; the memo compares it on cost and says so. The fallback test uses local
+  Ollama in the hosted API's place: the same code path, a different endpoint. Claude-specific
+  replay (tool-use id format, no thinking blocks on replayed turns) is covered by unit tests.
+- **Hybrid measured from the self-hosted run, not run live:** without hosted runs, what can be
+  measured is whether the self-hosted model's confidence separates its right answers from its
+  wrong ones, which decides whether "escalate when unsure" can work at all.
+- **Results, decided:** recommend the hosted API at today's volume and keep the self-hosted path
+  ready (docs/RECOMMENDATION.md). If self-hosting: self-hosted first, hosted fallback, escalate
+  failed runs. Don't escalate on the model's confidence: every completed diagnosis reported
+  0.85-0.95, including the wrong actions, so it doesn't separate good answers from bad ones.
