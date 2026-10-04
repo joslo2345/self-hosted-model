@@ -43,12 +43,15 @@ resources:
   requests: { cpu: "4", memory: 32Gi }
   limits: { memory: 64Gi }
 
-# Weight cache: Hugging Face downloads land on a persistent volume, so a restarted pod (or a new
-# node after scale-to-zero, once the disk reattaches) loads from disk instead of downloading again.
+# Weight cache: Hugging Face downloads land on a persistent volume, so a restarted pod or a new
+# replica loads from it instead of downloading again. With autoscaling, replicas run on different
+# GPU nodes, so the volume must be shared (ReadWriteMany): a premium Azure file share, which also
+# removes the zone pinning an Azure disk needs (docs/DECISIONS.md, B3).
 cache:
   enabled: true
-  size: 40Gi                 # bf16 weights are ~19 GB
-  storageClass: managed-csi-premium
+  size: 100Gi                # bf16 weights are ~19 GB; 100 GiB is the premium file share minimum
+  storageClass: azurefile-csi-premium
+  accessMode: ReadWriteMany
   # true after the first download: start without contacting Hugging Face at all.
   offline: false
   # Download weights in an init container before vLLM starts (see templates/deployment.yaml).
@@ -69,6 +72,23 @@ probes:
 service:
   port: 8000
 
+# Prometheus scrapes vLLM's /metrics (no API key needed) through the standard pod annotations.
+metrics:
+  enabled: true
+
+# B3: KEDA scales the Deployment on requests waiting in vLLM's queue, not on CPU or GPU use
+# (docs/DECISIONS.md). It reads the queue from Prometheus.
+autoscaling:
+  enabled: true
+  minReplicas: 1             # no scale from zero: with no pod, there is no queue to measure
+  maxReplicas: 2
+  prometheusAddress: http://prometheus-server.monitoring.svc
+  # Target requests waiting per replica, averaged over 30 s. Any waiting means a replica's batch or
+  # KV cache is full, so a small number scales out early.
+  waitingPerReplica: 4
+  # A GPU replica takes minutes to start, so keep it through short lulls instead of flapping.
+  scaleDownStabilizationSeconds: 600
+
 # Only these pods may connect (Project A's agent by default). Everything else in the cluster is
 # refused, and there is no Ingress: the endpoint is never exposed outside the cluster.
 networkPolicy:
@@ -76,3 +96,7 @@ networkPolicy:
   from:
     - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: ia } }
       podSelector: { matchLabels: { app.kubernetes.io/name: agent } }
+  # Prometheus, for scraping /metrics. It shares the API port, but the API still needs the key.
+  metricsFrom:
+    - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: monitoring } }
+      podSelector: { matchLabels: { app.kubernetes.io/name: prometheus } }

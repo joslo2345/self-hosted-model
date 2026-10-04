@@ -32,5 +32,13 @@ resources:
 cache:
   size: 5Gi
   storageClass: standard      # kind's local-path provisioner
+  accessMode: ReadWriteOnce   # one node, so replicas can share a ReadWriteOnce volume
+
+# Scale on a smaller queue than on GPU: --max-num-seqs=4 above, so a spike queues quickly. Docker
+# Desktop's VM has room for one replica, so the second one stays Pending, like a pod waiting for a
+# GPU node. A shorter scale-down window keeps the spike test short.
+autoscaling:
+  waitingPerReplica: 2
+  scaleDownStabilizationSeconds: 120
 
 shmSize: 1Gi

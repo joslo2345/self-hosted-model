@@ -1,0 +1,35 @@
+{{- if .Values.autoscaling.enabled }}
+{{- $a := .Values.autoscaling }}
+{{- if and (gt (int $a.maxReplicas) 1) .Values.cache.enabled .Values.gpu.enabled (eq .Values.cache.accessMode "ReadWriteOnce") }}
+{{- fail "autoscaling.maxReplicas > 1 on GPU nodes needs a shared cache: set cache.accessMode=ReadWriteMany (a ReadWriteOnce disk attaches to one node only)" }}
+{{- end }}
+# KEDA creates and drives an HPA for the Deployment from vLLM's queue depth (docs/DECISIONS.md, B3).
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ .Release.Name }}
+  labels: {{- include "vllm.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    name: {{ .Release.Name }}
+  minReplicaCount: {{ $a.minReplicas }}
+  maxReplicaCount: {{ $a.maxReplicas }}
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 0
+          policies: [{ type: Pods, value: 1, periodSeconds: 30 }]   # one GPU node at a time
+        scaleDown:
+          stabilizationWindowSeconds: {{ $a.scaleDownStabilizationSeconds }}
+          policies: [{ type: Pods, value: 1, periodSeconds: 60 }]
+  triggers:
+    - type: prometheus
+      metadata:
+        serverAddress: {{ $a.prometheusAddress | quote }}
+        # Requests waiting, summed over the release's pods. The HPA divides by the target, so the
+        # desired replica count is ceil(waiting / waitingPerReplica).
+        query: 'sum(avg_over_time(vllm:num_requests_waiting{namespace="{{ .Release.Namespace }}",app_kubernetes_io_instance="{{ .Release.Name }}"}[30s]))'
+        threshold: {{ $a.waitingPerReplica | quote }}
+        metricType: AverageValue
+{{- end }}

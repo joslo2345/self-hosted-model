@@ -1,0 +1,52 @@
+# B3: Prometheus for the kind test (prometheus-community/prometheus). Server and kube-state-metrics
+# only: alerts are evaluated here and visible in the Prometheus UI; routing them to a pager is
+# Project A's on-call setup, not this package. On AKS, Azure Managed Prometheus scrapes the same
+# pod annotations and loads the same rule file (docs/DECISIONS.md, B3).
+server:
+  global:
+    scrape_interval: 5s          # same as Project A; the queue changes within seconds in a spike
+    scrape_timeout: 4s
+    evaluation_interval: 15s
+  retention: 2d
+  persistentVolume: { enabled: false }
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 1Gi }
+  # Alert rules from deploy/monitoring/alerts, as a ConfigMap (make monitoring-up).
+  extraConfigmapMounts:
+    - { name: vllm-rules, mountPath: /etc/rules/vllm, configMap: vllm-alert-rules, readOnly: true }
+
+configmapReload:
+  prometheus:
+    # Reload Prometheus when the rules ConfigMap changes, too.
+    extraConfigmapMounts:
+      - { name: vllm-rules, mountPath: /etc/rules/vllm, configMap: vllm-alert-rules, readOnly: true }
+
+serverFiles:
+  prometheus.yml:
+    rule_files:
+      - /etc/rules/vllm/*.rules.yaml
+
+# Only what B3 uses: vLLM pods (annotations), kube-state-metrics (service endpoints) and Prometheus
+# itself. The API server, node and cAdvisor jobs roughly doubled Prometheus's memory, and Docker
+# Desktop's VM has no room to spare next to the vLLM pod.
+scrapeConfigs:
+  kubernetes-api-servers: { enabled: false }
+  kubernetes-nodes: { enabled: false }
+  kubernetes-nodes-cadvisor: { enabled: false }
+  kubernetes-service-endpoints-slow: { enabled: false }
+  kubernetes-services: { enabled: false }
+  kubernetes-pods-slow: { enabled: false }
+  prometheus-pushgateway: { enabled: false }
+
+alertmanager: { enabled: false }
+prometheus-node-exporter: { enabled: false }
+prometheus-pushgateway: { enabled: false }
+
+# Replica, pending-pod and restart counts for the dashboard and alerts.
+kube-state-metrics:
+  enabled: true
+  collectors: [pods, deployments, horizontalpodautoscalers]
+  resources:
+    requests: { cpu: 20m, memory: 64Mi }
+    limits: { memory: 256Mi }

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # B2: check the vLLM chart on kind (make kind-up, then helm install with values-kind.yaml).
 #   1. auth: /health is open, the API needs the key
-#   2. NetworkPolicy: only Project A's agent pod (namespace ia, app.kubernetes.io/name=agent) connects
+#   2. NetworkPolicy: only Project A's agent pod (namespace ia, app.kubernetes.io/name=agent) connects,
+#      plus Prometheus (namespace monitoring, B3) for /metrics
 #   3. streaming works at the protocol level (several SSE chunks, then [DONE])
 #   4. the B1 smoke test, for information only: the 0.8B stand-in's answers vary from run to run,
 #      so its content checks don't gate this script (the real model's smoke result is in B1)
@@ -38,6 +39,11 @@ check "agent pod, /v1/models without key" 401 "$(probe ia agent /v1/models)"
 check "agent pod, /v1/models with key" 200 "$(probe ia agent /v1/models "$KEY")"
 check "other pod in ia, with key (blocked)" 000 "$(probe ia web /v1/models "$KEY")"
 check "pod in $NS, with key (blocked)" 000 "$(probe "$NS" debug /v1/models "$KEY")"
+if kubectl get namespace monitoring >/dev/null 2>&1; then
+  check "prometheus pod, /metrics without key" 200 "$(probe monitoring prometheus /metrics)"
+  check "prometheus pod, /v1/models without key" 401 "$(probe monitoring prometheus /v1/models)"
+  check "other pod in monitoring (blocked)" 000 "$(probe monitoring grafana /metrics)"
+fi
 
 # Smoke test through a port-forward (kubectl's tunnel isn't subject to NetworkPolicy, which the
 # probes above cover).

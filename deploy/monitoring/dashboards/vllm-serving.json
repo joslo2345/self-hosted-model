@@ -1,0 +1,585 @@
+{
+  "uid": "vllm-serving",
+  "title": "vLLM serving",
+  "tags": [
+    "self-hosted-model"
+  ],
+  "schemaVersion": 39,
+  "refresh": "10s",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "editable": false,
+  "templating": {
+    "list": [
+      {
+        "name": "namespace",
+        "label": "Namespace",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": {
+          "query": "label_values(vllm:num_requests_running, namespace)",
+          "refId": "namespace"
+        },
+        "definition": "label_values(vllm:num_requests_running, namespace)",
+        "refresh": 2,
+        "current": {
+          "text": "selfhost",
+          "value": "selfhost"
+        },
+        "includeAll": false,
+        "multi": false
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Requests running and waiting",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "A",
+          "expr": "sum(vllm:num_requests_running{namespace=\"$namespace\"})",
+          "legendFormat": "running"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "B",
+          "expr": "sum(vllm:num_requests_waiting{namespace=\"$namespace\"})",
+          "legendFormat": "waiting (KEDA scales on this)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 8,
+        "h": 8
+      },
+      "id": 1,
+      "description": "Waiting requests are the autoscaling signal: the KEDA ScaledObject targets a number of waiting requests per replica."
+    },
+    {
+      "type": "timeseries",
+      "title": "Replicas",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "A",
+          "expr": "max(kube_horizontalpodautoscaler_status_desired_replicas{namespace=\"$namespace\", horizontalpodautoscaler=~\"keda-hpa-.*\"})",
+          "legendFormat": "desired (KEDA)"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "B",
+          "expr": "max(kube_deployment_status_replicas{namespace=\"$namespace\", deployment=\"vllm\"})",
+          "legendFormat": "created"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "C",
+          "expr": "max(kube_deployment_status_replicas_available{namespace=\"$namespace\", deployment=\"vllm\"})",
+          "legendFormat": "ready"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "D",
+          "expr": "sum(kube_pod_status_phase{namespace=\"$namespace\", phase=\"Pending\", pod=~\"vllm-.*\"})",
+          "legendFormat": "pending"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 8,
+        "h": 8
+      },
+      "id": 2,
+      "description": "Desired minus ready is scale-up in progress: a pod waiting for a node, downloading or loading weights."
+    },
+    {
+      "type": "timeseries",
+      "title": "Time to first token",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "A",
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(vllm:time_to_first_token_seconds_bucket{namespace=\"$namespace\"}[1m])))",
+          "legendFormat": "p50"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(vllm:time_to_first_token_seconds_bucket{namespace=\"$namespace\"}[1m])))",
+          "legendFormat": "p95"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 2
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 8,
+        "h": 8
+      },
+      "id": 3,
+      "description": "Includes queue time. The dashed line is the alert target (2 s, VLLMTimeToFirstTokenHigh)."
+    },
+    {
+      "type": "timeseries",
+      "title": "Inter-token latency",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "A",
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(vllm:inter_token_latency_seconds_bucket{namespace=\"$namespace\"}[1m])))",
+          "legendFormat": "p50"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(vllm:inter_token_latency_seconds_bucket{namespace=\"$namespace\"}[1m])))",
+          "legendFormat": "p95"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 8,
+        "h": 8
+      },
+      "id": 4
+    },
+    {
+      "type": "timeseries",
+      "title": "Tokens per second",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "A",
+          "expr": "sum(rate(vllm:generation_tokens_total{namespace=\"$namespace\"}[1m]))",
+          "legendFormat": "generated"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "B",
+          "expr": "sum(rate(vllm:prompt_tokens_total{namespace=\"$namespace\"}[1m]))",
+          "legendFormat": "prompt (prefill)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 8,
+        "w": 8,
+        "h": 8
+      },
+      "id": 5
+    },
+    {
+      "type": "timeseries",
+      "title": "KV cache usage",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "A",
+          "expr": "max by (pod) (vllm:kv_cache_usage_perc{namespace=\"$namespace\"})",
+          "legendFormat": "{{pod}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0.9
+              }
+            ]
+          },
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 8,
+        "w": 8,
+        "h": 8
+      },
+      "id": 6,
+      "description": "Sustained above 90% fires VLLMKVCacheNearlyFull."
+    },
+    {
+      "type": "timeseries",
+      "title": "Queue time",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "A",
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(vllm:request_queue_time_seconds_bucket{namespace=\"$namespace\"}[1m])))",
+          "legendFormat": "p50"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(vllm:request_queue_time_seconds_bucket{namespace=\"$namespace\"}[1m])))",
+          "legendFormat": "p95"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 8,
+        "h": 8
+      },
+      "id": 7,
+      "description": "Time requests spend waiting before the engine starts them: the user-visible cost of a scale-up that hasn't finished."
+    },
+    {
+      "type": "timeseries",
+      "title": "Finished requests",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "A",
+          "expr": "sum by (finished_reason) (rate(vllm:request_success_total{namespace=\"$namespace\"}[1m]))",
+          "legendFormat": "{{finished_reason}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 16,
+        "w": 8,
+        "h": 8
+      },
+      "id": 8
+    },
+    {
+      "type": "timeseries",
+      "title": "Preemptions and restarts",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "A",
+          "expr": "sum(increase(vllm:num_preemptions_total{namespace=\"$namespace\"}[5m]))",
+          "legendFormat": "preemptions (5m)"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "B",
+          "expr": "sum(increase(kube_pod_container_status_restarts_total{namespace=\"$namespace\", container=\"vllm\"}[15m]))",
+          "legendFormat": "container restarts (15m)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 16,
+        "w": 8,
+        "h": 8
+      },
+      "id": 9
+    }
+  ]
+}

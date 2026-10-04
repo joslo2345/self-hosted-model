@@ -1,5 +1,6 @@
 .DEFAULT_GOAL := help
-.PHONY: help install check lint typecheck test engine serve smoke kind-up kind-down deploy-check kind-check cold-start
+.PHONY: help install check lint typecheck test engine serve smoke kind-up kind-down deploy-check kind-check cold-start \
+	monitoring-up rules-check grafana prometheus spike
 
 help:  ## List targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
@@ -94,3 +95,42 @@ kind-check:  ## Auth, NetworkPolicy and streaming checks against the chart on ki
 
 cold-start:  ## Time the vLLM pod to Ready on kind: empty cache, cached, cached + offline
 	./scripts/cold_start.sh
+
+# ---- B3: autoscaling and observability on kind ----
+PROMETHEUS_CHART := 29.35.0
+GRAFANA_CHART := 10.5.15
+KEDA_CHART := 2.21.0
+PROMETHEUS_IMAGE := prom/prometheus:v3.15.0
+
+monitoring-up:  ## Prometheus (with the vLLM alert rules), Grafana (with the serving dashboard) and KEDA on kind
+	helm repo add prometheus-community https://prometheus-community.github.io/helm-charts > /dev/null
+	helm repo add grafana https://grafana.github.io/helm-charts > /dev/null
+	helm repo add kedacore https://kedacore.github.io/charts > /dev/null
+	helm repo update prometheus-community grafana kedacore > /dev/null
+	kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f - > /dev/null
+	kubectl -n monitoring create configmap vllm-alert-rules --from-file=deploy/monitoring/alerts/vllm.rules.yaml \
+	  --dry-run=client -o yaml | kubectl apply -f -
+	kubectl -n monitoring create configmap vllm-dashboards --from-file=deploy/monitoring/dashboards \
+	  --dry-run=client -o yaml | kubectl apply -f -
+	helm upgrade --install prometheus prometheus-community/prometheus --version $(PROMETHEUS_CHART) \
+	  -n monitoring -f deploy/monitoring/prometheus-values.yaml --wait
+	helm upgrade --install grafana grafana/grafana --version $(GRAFANA_CHART) \
+	  -n monitoring -f deploy/monitoring/grafana-values.yaml --wait
+	helm upgrade --install keda kedacore/keda --version $(KEDA_CHART) \
+	  -n keda --create-namespace -f deploy/monitoring/keda-values.yaml --wait
+
+rules-check:  ## promtool: check the alert rules and run their unit tests (needs Docker)
+	docker run --rm -v "$(CURDIR)/deploy/monitoring/alerts:/rules" -w /rules --entrypoint promtool \
+	  $(PROMETHEUS_IMAGE) check rules vllm.rules.yaml
+	docker run --rm -v "$(CURDIR)/deploy/monitoring/alerts:/rules" -w /rules --entrypoint promtool \
+	  $(PROMETHEUS_IMAGE) test rules vllm.rules.test.yaml
+
+grafana:  ## Grafana on http://127.0.0.1:3100 (user admin; prints the password)
+	@kubectl -n monitoring get secret grafana -o jsonpath='{.data.admin-password}' | base64 -d; echo
+	kubectl -n monitoring port-forward --address 127.0.0.1 svc/grafana 3100:80
+
+prometheus:  ## Prometheus on http://127.0.0.1:9091
+	kubectl -n monitoring port-forward --address 127.0.0.1 svc/prometheus-server 9091:80
+
+spike:  ## Spike test on kind: queue, KEDA scale-up and TTFT over time (writes eval/b3/)
+	./scripts/spike_test.sh

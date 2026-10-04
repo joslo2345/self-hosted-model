@@ -117,3 +117,50 @@ Method choices:
 - **Note:** Project A's own kind cluster (`incident-assistant`) won't start: Docker reports its
   container storage as broken. B2 used a separate cluster (`selfhost`). Project A's
   `make kind-up` rebuilds its cluster when it's needed.
+
+## B3 · Autoscaling and observability (2026-10-03)
+
+- **Scale on requests waiting, not CPU or GPU use.** vLLM's CPU use says little about load: the
+  engine runs on the GPU, and one CPU core drives it whether the batch is full or not. GPU
+  utilization is close to 100% with a single long request too, so it can't tell a busy replica
+  from a saturated one. `vllm:num_requests_waiting` counts requests the engine couldn't fit into
+  the running batch (batch size or KV cache full), which is exactly when another replica helps and
+  when users start waiting. KEDA's Prometheus trigger drives the HPA with
+  `sum(avg_over_time(vllm:num_requests_waiting[30s]))`, targeting 4 waiting requests per replica
+  on GPU (2 on kind, where `--max-num-seqs=4`). The 30 s average keeps one burst from adding a GPU node.
+- **Rejected:** CPU-based HPA (the wrong signal, see above); GPU utilization from DCGM (saturates
+  early and needs the DCGM exporter); requests running (it stops at the batch limit, so it can't
+  show how far over capacity the replica is); time to first token (the effect, not the cause; it
+  lags and mixes in prompt length). TTFT is an alert instead.
+- **Min 1 replica, max 2, no scale from zero.** With no pod there is no queue to measure, and
+  the agent's request would wait minutes for a GPU node either way. Scale-to-zero stays a
+  deliberate action (`kubectl scale --replicas=0`, or a KEDA cron trigger for off-hours later),
+  and the GPU pool still scales to zero once no pod needs it. `gpu_max_nodes` is now 2 to match.
+- **Scale up fast, scale down slowly.** No stabilization on scale-up, one replica per 30 s. On
+  scale-down, a 10-minute window (2 minutes on kind): a GPU replica takes minutes to start, and
+  dropping it after a short lull just to add it again costs more than keeping it.
+- **Shared weight cache:** replicas on different nodes can't share a ReadWriteOnce Azure disk, so
+  the GPU values now use a 100 GiB premium Azure file share (`azurefile-csi-premium`,
+  ReadWriteMany). That also removes B2's caveat about zonal disks after scale-to-zero, and by
+  Azure's published limits a 100 GiB premium share (~110 MiB/s) reads faster than the 40 GiB
+  premium disk it replaces (a P6, 50 MB/s). B4 should check load times and cost. The chart refuses
+  `maxReplicas > 1` with a ReadWriteOnce cache on GPU nodes.
+- **Monitoring stack on kind:** the community `prometheus` chart (server + kube-state-metrics),
+  Grafana, KEDA. Not kube-prometheus-stack: its operator, node exporter and Alertmanager don't fit
+  next to the vLLM pod in Docker Desktop's 7.75 GB VM. Even the trimmed stack did not fit at first:
+  with the API server, node and cAdvisor scrape jobs on, the node swapped and vLLM's engine hung on
+  its first request (a 6-minute timeout, then a restart). Turning those jobs off took Prometheus
+  from 351 to 95 MiB.
+- **On AKS:** Azure Managed Prometheus and Managed Grafana read the same pod annotations, rule file and
+  dashboard JSON, so nothing in-cluster beyond KEDA (an AKS add-on) is needed. KEDA would then need
+  workload identity to query the managed Prometheus endpoint (`autoscaling.prometheusAddress`).
+- **Alerts** (`deploy/monitoring/alerts/vllm.rules.yaml`, unit tested with promtool):
+  p95 TTFT above 2 s for 5 min (it includes queue time, so it is what an agent step feels);
+  KV cache above 90% for 5 min; any vLLM container restart; a replica Pending for 10 min (on
+  AKS: no spot GPU capacity). Routing them to a pager belongs to Project A's on-call setup.
+  The 2 s target is a starting point for an A100; B4's load test should confirm or move it.
+- **Dashboard** (`deploy/monitoring/dashboards/vllm-serving.json`) uses Project A's datasource uid,
+  so it loads next to A's fleet and system dashboards unchanged. A test checks that every metric
+  the dashboard, alerts and KEDA query use exists in vLLM 0.30 or kube-state-metrics.
+- **Prometheus may reach vLLM's port** (a second NetworkPolicy rule) for `/metrics`, which needs
+  no key; the API on the same port still requires it.

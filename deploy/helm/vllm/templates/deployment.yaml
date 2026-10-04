@@ -4,14 +4,23 @@ metadata:
   name: {{ .Release.Name }}
   labels: {{- include "vllm.labels" . | nindent 4 }}
 spec:
+  {{- if not .Values.autoscaling.enabled }}
   replicas: 1
-  # One GPU and a ReadWriteOnce cache volume: the old pod must stop before the new one starts.
+  {{- end }}
+  # Each replica holds a whole GPU: an upgrade stops the old pods before starting new ones, instead
+  # of needing a spare GPU node for a rolling update.
   strategy: { type: Recreate }
   selector:
     matchLabels: {{- include "vllm.selector" . | nindent 6 }}
   template:
     metadata:
       labels: {{- include "vllm.labels" . | nindent 8 }}
+      {{- if .Values.metrics.enabled }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ .Values.service.port | quote }}
+        prometheus.io/path: /metrics
+      {{- end }}
     spec:
       {{- if .Values.gpu.enabled }}
       nodeSelector: {{- toYaml .Values.gpu.nodeSelector | nindent 8 }}
