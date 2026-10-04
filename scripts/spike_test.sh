@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # B3: spike test on kind. Needs the chart installed with values-kind.yaml and `make monitoring-up`.
-# Port-forwards vLLM and Prometheus on 127.0.0.1 only, then runs `selfhost spike`:
+# Port-forwards (127.0.0.1 only) to an in-cluster proxy in front of vLLM's Service and to
+# Prometheus, then runs `selfhost spike`:
 #   baseline 60 s at 0.05 req/s, spike 180 s at 0.4 req/s (the CPU stand-in serves ~0.23 req/s),
 #   recovery 120 s at 0.05 req/s, then 3 more minutes of sampling to see the scale-down.
 # Results: eval/b3/spike.md (summary) and eval/b3/spike.json (every request and sample).
@@ -11,7 +12,11 @@ PHASES=${PHASES:-60:0.05,180:0.4,120:0.05}
 KEY=$(kubectl -n "$NS" get secret vllm-api-key -o jsonpath='{.data.api-key}' | base64 -d)
 WAITING_TARGET=$(kubectl -n "$NS" get scaledobject vllm -o jsonpath='{.spec.triggers[0].metadata.threshold}')
 
-kubectl -n "$NS" port-forward --address 127.0.0.1 svc/vllm 8101:8000 >/dev/null 2>&1 &
+# Through the in-cluster proxy (deploy/kind/load-proxy.yaml), so requests spread over every ready
+# replica; a port-forward to svc/vllm would pin them all to one pod.
+kubectl apply -f deploy/kind/load-proxy.yaml >/dev/null
+kubectl -n ia rollout status deploy/load-proxy --timeout=120s >/dev/null
+kubectl -n ia port-forward --address 127.0.0.1 deploy/load-proxy 8101:8000 >/dev/null 2>&1 &
 pf_vllm=$!
 kubectl -n monitoring port-forward --address 127.0.0.1 svc/prometheus-server 9091:80 >/dev/null 2>&1 &
 pf_prom=$!
