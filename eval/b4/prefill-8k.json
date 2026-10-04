@@ -1,0 +1,520 @@
+{
+ "label": "prefill-8k",
+ "config": {
+  "base_url": "http://127.0.0.1:8100/v1",
+  "model": "qwen3.5-9b",
+  "duration_s": 180.0,
+  "calls_per_incident": 4.35
+ },
+ "levels": [
+  {
+   "summary": {
+    "concurrency": 1,
+    "duration_s": 182.30054608301725,
+    "calls": 7,
+    "errors": 0,
+    "timeouts": 0,
+    "ttft_p50": 3.93270933299209,
+    "ttft_p95": 26.583933290996356,
+    "latency_p50": 23.86380312498659,
+    "latency_p95": 45.758740999997826,
+    "decode_tps_p50": 13.076786051401905,
+    "output_tps": 8.946764203642397,
+    "prompt_tps": 243.2192385194974,
+    "calls_per_hour": 138.23326666571944,
+    "incidents_per_hour": 31.77776245188953
+   },
+   "calls": [
+    {
+     "agent": 0,
+     "conversation": 0,
+     "index": 0,
+     "started": 6.054100231267512e-05,
+     "ttft": 9.68936445901636,
+     "latency": 32.70725270899129,
+     "prompt_tokens": 3063,
+     "output_tokens": 301,
+     "error": null
+    },
+    {
+     "agent": 0,
+     "conversation": 0,
+     "index": 1,
+     "started": 32.70732237500488,
+     "ttft": 26.583933290996356,
+     "latency": 45.758740999997826,
+     "prompt_tokens": 10155,
+     "output_tokens": 245,
+     "error": null
+    },
+    {
+     "agent": 0,
+     "conversation": 0,
+     "index": 2,
+     "started": 78.46606737500406,
+     "ttft": 3.93270933299209,
+     "latency": 43.49951341599808,
+     "prompt_tokens": 11028,
+     "output_tokens": 482,
+     "error": null
+    },
+    {
+     "agent": 0,
+     "conversation": 1,
+     "index": 0,
+     "started": 121.96558408299461,
+     "ttft": 3.856190250022337,
+     "latency": 10.449549917015247,
+     "prompt_tokens": 3616,
+     "output_tokens": 96,
+     "error": null
+    },
+    {
+     "agent": 0,
+     "conversation": 1,
+     "index": 1,
+     "started": 132.41513837501407,
+     "ttft": 5.777500291005708,
+     "latency": 23.86380312498659,
+     "prompt_tokens": 4942,
+     "output_tokens": 237,
+     "error": null
+    },
+    {
+     "agent": 0,
+     "conversation": 1,
+     "index": 2,
+     "started": 156.27894545800518,
+     "ttft": 1.935255042015342,
+     "latency": 8.840366166987224,
+     "prompt_tokens": 5286,
+     "output_tokens": 92,
+     "error": null
+    },
+    {
+     "agent": 0,
+     "conversation": 1,
+     "index": 3,
+     "started": 165.1193160410039,
+     "ttft": 3.4952464170055464,
+     "latency": 17.181128625001293,
+     "prompt_tokens": 6249,
+     "output_tokens": 178,
+     "error": null
+    }
+   ]
+  },
+  {
+   "summary": {
+    "concurrency": 2,
+    "duration_s": 226.50477795800543,
+    "calls": 12,
+    "errors": 0,
+    "timeouts": 0,
+    "ttft_p50": 2.1050350420118775,
+    "ttft_p95": 29.437013750022743,
+    "latency_p50": 32.71395137501531,
+    "latency_p95": 67.40041183397989,
+    "decode_tps_p50": 10.370999024057337,
+    "output_tps": 14.887103179011868,
+    "prompt_tps": 369.30346791849456,
+    "calls_per_hour": 190.72445353894207,
+    "incidents_per_hour": 43.84470196297519
+   },
+   "calls": [
+    {
+     "agent": 0,
+     "conversation": 0,
+     "index": 0,
+     "started": 4.037498729303479e-05,
+     "ttft": 14.946009750012308,
+     "latency": 51.21070991700981,
+     "prompt_tokens": 3063,
+     "output_tokens": 301,
+     "error": null
+    },
+    {
+     "agent": 1,
+     "conversation": 9,
+     "index": 1,
+     "started": 0.0006212919834069908,
+     "ttft": 14.519301500025904,
+     "latency": 32.71395137501531,
+     "prompt_tokens": 6174,
+     "output_tokens": 217,
+     "error": null
+    },
+    {
+     "agent": 1,
+     "conversation": 9,
+     "index": 2,
+     "started": 32.71460691699758,
+     "ttft": 11.739389291004045,
+     "latency": 48.993647666007746,
+     "prompt_tokens": 8854,
+     "output_tokens": 374,
+     "error": null
+    },
+    {
+     "agent": 0,
+     "conversation": 0,
+     "index": 1,
+     "started": 51.2107541669975,
+     "ttft": 0.7418767909985036,
+     "latency": 24.061516082991147,
+     "prompt_tokens": 10155,
+     "output_tokens": 245,
+     "error": null
+    },
+    {
+     "agent": 0,
+     "conversation": 0,
+     "index": 2,
+     "started": 75.27227537499857,
+     "ttft": 2.1050350420118775,
+     "latency": 54.43030870798975,
+     "prompt_tokens": 11028,
+     "output_tokens": 482,
+     "error": null
+    },
+    {
+     "agent": 1,
+     "conversation": 9,
+     "index": 3,
+     "started": 81.70825833300478,
+     "ttft": 6.2347559169866145,
+     "latency": 67.40041183397989,
+     "prompt_tokens": 9980,
+     "output_tokens": 628,
+     "error": null
+    },
+    {
+     "agent": 0,
+     "conversation": 1,
+     "index": 0,
+     "started": 129.7025885419862,
+     "ttft": 1.8353251250227913,
+     "latency": 10.152810250001494,
+     "prompt_tokens": 3616,
+     "output_tokens": 96,
+     "error": null
+    },
+    {
+     "agent": 0,
+     "conversation": 1,
+     "index": 1,
+     "started": 139.85540508298436,
+     "ttft": 0.9679504590167198,
+     "latency": 23.820136584021384,
+     "prompt_tokens": 4942,
+     "output_tokens": 237,
+     "error": null
+    },
+    {
+     "agent": 1,
+     "conversation": 10,
+     "index": 0,
+     "started": 149.1086748749949,
+     "ttft": 3.349204041995108,
+     "latency": 29.419854792009573,
+     "prompt_tokens": 3551,
+     "output_tokens": 301,
+     "error": null
+    },
+    {
+     "agent": 0,
+     "conversation": 1,
+     "index": 2,
+     "started": 163.675546457991,
+     "ttft": 0.27385137500823475,
+     "latency": 7.685241250001127,
+     "prompt_tokens": 5286,
+     "output_tokens": 92,
+     "error": null
+    },
+    {
+     "agent": 0,
+     "conversation": 1,
+     "index": 3,
+     "started": 171.3607929169957,
+     "ttft": 1.8149059579882305,
+     "latency": 46.26252391599701,
+     "prompt_tokens": 6249,
+     "output_tokens": 178,
+     "error": null
+    },
+    {
+     "agent": 1,
+     "conversation": 10,
+     "index": 1,
+     "started": 178.5285343749856,
+     "ttft": 29.437013750022743,
+     "latency": 47.976128958020126,
+     "prompt_tokens": 10751,
+     "output_tokens": 221,
+     "error": null
+    }
+   ]
+  },
+  {
+   "summary": {
+    "concurrency": 4,
+    "duration_s": 252.32429241601494,
+    "calls": 11,
+    "errors": 0,
+    "timeouts": 0,
+    "ttft_p50": 17.16399608302163,
+    "ttft_p95": 44.1332386250142,
+    "latency_p50": 82.72175279198564,
+    "latency_p95": 177.06958437501453,
+    "decode_tps_p50": 7.538802979623684,
+    "output_tps": 17.810413563314793,
+    "prompt_tps": 410.1269798842081,
+    "calls_per_hour": 156.94089388234664,
+    "incidents_per_hour": 36.07836640973486
+   },
+   "calls": [
+    {
+     "agent": 0,
+     "conversation": 0,
+     "index": 0,
+     "started": 3.4666009014472365e-05,
+     "ttft": 32.0661211249826,
+     "latency": 82.53287525000633,
+     "prompt_tokens": 3063,
+     "output_tokens": 301,
+     "error": null
+    },
+    {
+     "agent": 1,
+     "conversation": 4,
+     "index": 7,
+     "started": 0.000781790993642062,
+     "ttft": 43.419216375012184,
+     "latency": 49.35461725000641,
+     "prompt_tokens": 12700,
+     "output_tokens": 59,
+     "error": null
+    },
+    {
+     "agent": 2,
+     "conversation": 9,
+     "index": 1,
+     "started": 0.0021775829955004156,
+     "ttft": 44.1332386250142,
+     "latency": 72.07041612500325,
+     "prompt_tokens": 6174,
+     "output_tokens": 217,
+     "error": null
+    },
+    {
+     "agent": 3,
+     "conversation": 15,
+     "index": 0,
+     "started": 0.002916583005571738,
+     "ttft": 44.03004491698812,
+     "latency": 83.2189674580004,
+     "prompt_tokens": 3040,
+     "output_tokens": 301,
+     "error": null
+    },
+    {
+     "agent": 1,
+     "conversation": 4,
+     "index": 8,
+     "started": 49.35540362499887,
+     "ttft": 6.6105065410083625,
+     "latency": 177.06958437501453,
+     "prompt_tokens": 14188,
+     "output_tokens": 942,
+     "error": null
+    },
+    {
+     "agent": 2,
+     "conversation": 9,
+     "index": 2,
+     "started": 72.07259774999693,
+     "ttft": 1.8517725830024574,
+     "latency": 95.0518299160176,
+     "prompt_tokens": 8854,
+     "output_tokens": 374,
+     "error": null
+    },
+    {
+     "agent": 0,
+     "conversation": 0,
+     "index": 1,
+     "started": 82.53291420801543,
+     "ttft": 0.802668749995064,
+     "latency": 60.049721749994205,
+     "prompt_tokens": 10155,
+     "output_tokens": 245,
+     "error": null
+    },
+    {
+     "agent": 3,
+     "conversation": 15,
+     "index": 1,
+     "started": 83.2218877080013,
+     "ttft": 29.01632791699376,
+     "latency": 62.045444167015376,
+     "prompt_tokens": 10104,
+     "output_tokens": 249,
+     "error": null
+    },
+    {
+     "agent": 0,
+     "conversation": 0,
+     "index": 2,
+     "started": 142.58264504099498,
+     "ttft": 2.1917082089930773,
+     "latency": 86.91049154201755,
+     "prompt_tokens": 11028,
+     "output_tokens": 482,
+     "error": null
+    },
+    {
+     "agent": 3,
+     "conversation": 15,
+     "index": 2,
+     "started": 145.26733974998933,
+     "ttft": 17.16399608302163,
+     "latency": 107.0568575830257,
+     "prompt_tokens": 14199,
+     "output_tokens": 696,
+     "error": null
+    },
+    {
+     "agent": 2,
+     "conversation": 9,
+     "index": 3,
+     "started": 167.1244343330036,
+     "ttft": 2.1900845000054687,
+     "latency": 82.72175279198564,
+     "prompt_tokens": 9980,
+     "output_tokens": 628,
+     "error": null
+    }
+   ]
+  },
+  {
+   "summary": {
+    "concurrency": 8,
+    "duration_s": 295.2922762919916,
+    "calls": 9,
+    "errors": 0,
+    "timeouts": 0,
+    "ttft_p50": 124.9902772079804,
+    "ttft_p95": 152.22194783299346,
+    "latency_p50": 207.736936375004,
+    "latency_p95": 282.1254547079734,
+    "decode_tps_p50": 4.947177219537194,
+    "output_tps": 14.412838877612812,
+    "prompt_tps": 295.2769408495521,
+    "calls_per_hour": 109.72179972618775,
+    "incidents_per_hour": 25.223402235905233
+   },
+   "calls": [
+    {
+     "agent": 0,
+     "conversation": 0,
+     "index": 0,
+     "started": 4.179199459031224e-05,
+     "ttft": 32.86190345798968,
+     "latency": 207.736936375004,
+     "prompt_tokens": 3063,
+     "output_tokens": 301,
+     "error": null
+    },
+    {
+     "agent": 1,
+     "conversation": 2,
+     "index": 2,
+     "started": 0.0005727919924538583,
+     "ttft": 124.9902772079804,
+     "latency": 262.2402623749804,
+     "prompt_tokens": 12112,
+     "output_tokens": 679,
+     "error": null
+    },
+    {
+     "agent": 2,
+     "conversation": 4,
+     "index": 7,
+     "started": 0.0014048339799046516,
+     "ttft": 63.59951862500748,
+     "latency": 160.5226287910191,
+     "prompt_tokens": 12700,
+     "output_tokens": 59,
+     "error": null
+    },
+    {
+     "agent": 3,
+     "conversation": 6,
+     "index": 3,
+     "started": 0.0028100839990656823,
+     "ttft": 150.14766079100082,
+     "latency": 269.22983620798914,
+     "prompt_tokens": 15155,
+     "output_tokens": 733,
+     "error": null
+    },
+    {
+     "agent": 4,
+     "conversation": 9,
+     "index": 1,
+     "started": 0.004001749999588355,
+     "ttft": 124.9870289999817,
+     "latency": 195.42755020898767,
+     "prompt_tokens": 6174,
+     "output_tokens": 217,
+     "error": null
+    },
+    {
+     "agent": 5,
+     "conversation": 12,
+     "index": 1,
+     "started": 0.004707458982011303,
+     "ttft": 152.22194783299346,
+     "latency": 188.114258082991,
+     "prompt_tokens": 10105,
+     "output_tokens": 172,
+     "error": null
+    },
+    {
+     "agent": 6,
+     "conversation": 15,
+     "index": 0,
+     "started": 0.0054090839985292405,
+     "ttft": 151.8684704999905,
+     "latency": 208.1576885409886,
+     "prompt_tokens": 3040,
+     "output_tokens": 301,
+     "error": null
+    },
+    {
+     "agent": 7,
+     "conversation": 17,
+     "index": 5,
+     "started": 0.00590554199879989,
+     "ttft": 150.96584720799,
+     "latency": 282.1254547079734,
+     "prompt_tokens": 10656,
+     "output_tokens": 852,
+     "error": null
+    },
+    {
+     "agent": 2,
+     "conversation": 4,
+     "index": 8,
+     "started": 160.52406712499214,
+     "ttft": 6.917736041999888,
+     "latency": 134.76814566698158,
+     "prompt_tokens": 14188,
+     "output_tokens": 942,
+     "error": null
+    }
+   ]
+  }
+ ]
+}

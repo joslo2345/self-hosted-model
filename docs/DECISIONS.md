@@ -164,3 +164,42 @@ Method choices:
   the dashboard, alerts and KEDA query use exists in vLLM 0.30 or kube-state-metrics.
 - **Prometheus may reach vLLM's port** (a second NetworkPolicy rule) for `/metrics`, which needs
   no key; the API on the same port still requires it.
+
+## B4 · Load testing and cost (2026-10-03)
+
+- **Load from real agent traces, replayed exactly.** `scripts/export_traces.py` rebuilds the 20 B1
+  Qwen runs (87 model calls) from Project A's trace tables, using A's own system prompt, incident
+  rendering and tool list. Replayed prompts match the recorded token counts exactly (checked on 26
+  calls). Each call asks for the recorded output length (`ignore_eos`), so prompt and output sizes
+  match production: 8,877 prompt and 338 output tokens per call on average, 4.35 calls per
+  incident. Rejected: Locust/k6 with synthetic prompts (wrong lengths and no shared prefixes) and
+  vLLM's benchmark scripts (no multi-turn agent conversations).
+- **Closed-loop agents, not a request rate.** An agent makes one call at a time, as Project A's
+  does, so concurrency = agents working incidents at once. A call over the agent's 300 s limit
+  counts as a timeout, and the agent abandons that incident.
+- **Call mix must match the traces at every level.** The first version started every agent at an
+  incident's first call. At high concurrency each agent finished only one or two calls, so 84% of
+  calls at 64 agents were short first calls (3,460 prompt tokens against 8,877), and throughput
+  read ~7x too high (210 incidents/hour, against all calls timing out once fixed). Agents now
+  start at evenly spread positions among all 87 calls; a test checks the mix at 16 and 64 agents.
+- **Latency target: model call p95 <= 60 s, no timeouts**, so a typical incident (4-5 calls)
+  finishes in about 5 minutes. The A6 baseline's incidents took 125 s p50 / 287 s p95 end to end.
+- **Tuning changes measured:** prefix caching off (it's on by default: does reusing each call's
+  growing conversation pay?) and prefill chunks of 8,192 tokens instead of 2,048 (this workload is
+  96% prompt tokens). Quantization was already measured in B1 (8-bit kept).
+- **A100 numbers are estimated, not measured ($0).** `GpuEstimate` in `src/selfhost/cost.py`:
+  prefill at 40% of the A100's 312 TFLOPS, decode reading the 9.5 GB of FP8 weights per step at 70%
+  of its 1,935 GB/s, 16 requests decoding together. The 70% is backed by the laptop: 13 tok/s
+  single-stream decode x 9.5 GB is ~120 GB/s of the M3 Pro's 150 GB/s. Treat the result as ±2x;
+  a one-hour A100 run (~$4 on demand) would replace it with a measurement.
+- **Hosted cost** uses the same traces: each call reads the previous call's prompt from Claude's
+  prompt cache and writes only the new part (5-minute TTL; calls are seconds apart). Token counts
+  are Qwen's; Claude's tokenizer and Opus 5.5's always-on thinking raise them, so the hosted
+  figures are lower bounds (the report also shows output x3).
+- **Prices** (`data/b4_prices.json`, retrieved 2026-10-03): Azure Retail Prices API for
+  `Standard_NC24ads_A100_v4` in westus2 ($3.673/h on demand, $0.679/h spot) and Premium Files
+  ($0.16/GiB-month); Claude prices from Anthropic's published rates.
+- **Results, decided:** keep prefix caching on (0.4-0.6x throughput without it) and the default
+  2,048-token prefill chunks (8,192 changed nothing measurable on vllm-metal). Size self-hosting by
+  volume: below ~170 incidents/day (spot) or ~900/day (on demand), the hosted API costs less than
+  an always-on A100, before counting operations. B5 makes the recommendation with quality included.

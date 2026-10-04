@@ -20,3 +20,4 @@ __pycache__/
 *.tfstate
 *.tfstate.*
 terraform.tfvars
+eval/b4/*.serve.log

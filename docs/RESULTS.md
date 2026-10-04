@@ -218,3 +218,84 @@ a limit on vLLM's queue or the agent's concurrency, so overload fails fast inste
 **Monitoring footprint on kind:** with the default Prometheus scrape jobs, the 7.75 GB VM swapped and
 vLLM's engine hung on its first request until it restarted. With Prometheus limited to the jobs
 B3 uses, the steady state is vLLM 5.6 GiB, Prometheus 95 MiB, Grafana 91 MiB, KEDA ~130 MiB.
+
+## B4 · Load test and cost (2026-10-03)
+
+**Workload:** Project A's agent, replayed from the 20 B1 runs of the chosen model (Qwen3.5-9B
+8-bit, thinking off): 87 model calls, 4.35 per incident, 8,877 prompt and 338 output tokens per
+call on average. Each incident is 96% prompt tokens, because every call re-sends the growing
+conversation. Replayed prompts match the recorded token counts exactly. `make bench` runs it all
+from one script: a fresh vLLM per configuration, 180 s per level, closed-loop agents, 300 s limit
+per call. Full tables: `eval/b4/*.md`.
+
+**Laptop (M3 Pro, one vLLM replica), measured:**
+
+| Agents | TTFT p95 | Call p50 | Call p95 | Timeouts | Incidents/hour |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 26 s | 24 s | 45 s | 0 | 32 |
+| 2 | 29 s | 33 s | 68 s | 0 | **44** (peak) |
+| 4 | 43 s | 82 s | 176 s | 0 | 36 |
+| 8 | 147 s | 187 s | 278 s | 0 | 29 |
+| 16 | 212 s | 274 s | 295 s | 5 of 16 | 30 |
+| 32 | — | — | — | 32 of 32 | 0 (64 skipped) |
+
+- **Saturation at 2 agents.** Throughput peaks at 44 incidents/hour, then falls while latency keeps
+  rising. Only 1 agent meets the 60 s p95 target (32 incidents/hour). Per-call decode drops from
+  13 tok/s alone to 5 tok/s at 8 agents. Above about 12 agents, a call waits more than 300 s even
+  in steady state: one replica completes ~0.04 calls/s.
+- Samples per level are small (7–16 calls in 180 s), so treat differences under ~15% as noise.
+
+![Latency vs concurrency](img/b4-latency.png)
+
+**Tuning changes:**
+
+| Config | Within target | Peak | Effect |
+| --- | --- | --- | --- |
+| Baseline (prefix caching on, 2,048-token prefill chunks) | 32/h (1 agent) | 44/h (2) | |
+| Prefix caching off | none (call p95 76 s at 1 agent) | 20/h (1) | **0.4–0.6x throughput**; timeouts from 8 agents |
+| Prefill chunks of 8,192 tokens | 32/h (1) | 44/h (2) | no measurable change; slightly worse TTFT at 8 agents |
+
+Prefix caching is the lever that matters for an agent: each call's prompt starts with the previous
+call's whole conversation, so with caching only ~32% of prompt tokens need prefill (12,474 of
+38,614 per incident). It's on by default; this shows what it's worth and why it must stay on.
+Larger prefill chunks didn't help on vllm-metal; recheck on CUDA, where chunked prefill is tuned.
+
+**A first measurement mistake, caught:** the first load generator started every agent at an
+incident's first call. At high concurrency it measured mostly short first calls (84% at 64
+agents) and reported 210 incidents/hour at 64 agents. With the call mix fixed, every call at 32
+agents times out. The discarded numbers aren't committed; the test that prevents it is.
+
+**Cost** (`make cost`, `eval/b4/cost.md`; prices retrieved 2026-10-03):
+
+| Option | Cost per 1,000 incidents |
+| --- | --- |
+| Claude Opus 5.5 (prompt caching) | $97 ($156 if thinking triples output) |
+| Claude Sonnet 5.5 | $51 ($81) |
+| Claude Haiku 4.5 | $26 ($40) |
+| A100 on demand, fully used (est. 1,473 incidents/hour) | $2.49 |
+| A100 spot, fully used | $0.46 |
+
+A GPU costs the same per hour at any volume: one always-on A100 is $88.68/day on demand or
+$16.82/day spot, including the $16/month weight cache. So per-incident cost depends on volume:
+
+| Break-even (incidents/day) | vs Opus 5.5 | vs Sonnet 5.5 | vs Haiku 4.5 |
+| --- | --- | --- | --- |
+| A100 on demand | 914 | 1,735 | 3,470 |
+| A100 spot | 173 | 329 | 658 |
+
+![Cost per 1,000 incidents vs daily volume](img/b4-cost.png)
+
+- **Below a few hundred incidents a day, hosted is cheaper**, and much simpler to run. A GPU fleet
+  that raises tens of incidents a day pays $16.82–88.68/day for a GPU that's mostly idle, against
+  a few dollars of API calls.
+- **Self-hosting wins at volume:** one A100 (estimated ~35,000 incidents/day of capacity) costs
+  10–200x less per incident than the hosted models when it's busy.
+- **Spot only works with a fallback.** The break-even of 173/day assumes the spot node is always
+  there. B3 showed users wait in the queue when a GPU node is missing, so a spot deployment needs
+  the hosted API as fallback (Project A's provider switch) or an on-demand floor.
+- **The A100 capacity is an estimate** (first principles, ±2x; DECISIONS). Even at half the
+  estimate, break-even moves only within one replica's capacity (the fixed daily cost doesn't
+  change), and the volume conclusions hold. The laptop measured 44 incidents/hour peak; the
+  estimate is ~33x that; the A100 has 13x the memory bandwidth and far more compute.
+- Hosted figures use Qwen's token counts and exclude Opus 5.5's thinking tokens (always on), so
+  they're lower bounds. Quality differs too: B5 compares answers, not just cost.

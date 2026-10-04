@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 .PHONY: help install check lint typecheck test engine serve smoke kind-up kind-down deploy-check kind-check cold-start \
-	monitoring-up rules-check grafana prometheus spike
+	monitoring-up rules-check grafana prometheus spike bench cost
 
 help:  ## List targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
@@ -53,13 +53,15 @@ THINK ?= false
 PORT ?= 8100
 # Share of unified memory vLLM may use; 0.6 leaves room for Project A's Docker stack.
 GPU_MEM ?= 0.6
+# Engine flags on top of the candidate's (B4 tuning runs, e.g. --no-enable-prefix-caching).
+EXTRA_ARGS ?=
 
 engine:  ## Install pinned vLLM + vllm-metal into .venv-engine
 	./scripts/install_engine.sh
 
 serve:  ## Serve a shortlisted model on 127.0.0.1:PORT (CANDIDATE=qwen|qwen4|qwenbf16|granite|gemma, THINK=true|false)
 	.venv-engine/bin/vllm serve $(MODEL) --revision $(REVISION) --served-model-name $(NAME) --host 127.0.0.1 --port $(PORT) \
-	  --max-model-len 32768 --gpu-memory-utilization $(GPU_MEM) --enable-auto-tool-choice $(SERVE_ARGS) \
+	  --max-model-len 32768 --gpu-memory-utilization $(GPU_MEM) --enable-auto-tool-choice $(SERVE_ARGS) $(EXTRA_ARGS) \
 	  $(if $(THINK),--default-chat-template-kwargs '{"enable_thinking": $(THINK)}')
 
 smoke:  ## Chat, streaming and tool-call checks against the running endpoint
@@ -134,3 +136,10 @@ prometheus:  ## Prometheus on http://127.0.0.1:9091
 
 spike:  ## Spike test on kind: queue, KEDA scale-up and TTFT over time (writes eval/b3/)
 	./scripts/spike_test.sh
+
+# ---- B4: load test and cost ----
+bench:  ## Load test: baseline + 2 tuning configs, 1-64 agents replaying real traces (eval/b4/, ~1 h)
+	./scripts/b4_bench.sh
+
+cost:  ## Cost per incident, break-even volume and charts from the bench results (eval/b4/cost.md)
+	uv run python scripts/b4_report.py
