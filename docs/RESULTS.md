@@ -299,3 +299,57 @@ $16.82/day spot, including the $16/month weight cache. So per-incident cost depe
   estimate is ~33x that; the A100 has 13x the memory bandwidth and far more compute.
 - Hosted figures use Qwen's token counts and exclude Opus 5.5's thinking tokens (always on), so
   they're lower bounds. Quality differs too: B5 compares answers, not just cost.
+
+## B5 · Project A on the self-hosted model (2026-10-03)
+
+**Full A6 eval** (test set: 25 incidents, 7 failure types plus noisy neighbors, 3 decoys), Project
+A's unchanged `main`, switched to vLLM by environment only (`make b5-eval`). Citations judged by
+gemma3:12b with prompt v2, as in A6. Full report: `eval/b5/summary.md`.
+
+| Metric | A6 baseline (qwen3 30B-A3B, Ollama) | Self-hosted (Qwen3.5-9B, vLLM) |
+| --- | --- | --- |
+| Root cause correct | 22/25 (88%) | **23/25 (92%)** |
+| Action correct | **23/25 (92%)** | 20/25 (80%) |
+| Unsafe action on decoys | 0/3 | 0/3 |
+| Citations supported | 88% | **97%** |
+| Runbook cited | 76% | 80% |
+| Latency p50 / p95 | **125 / 287 s** | 158 / 390 s |
+| Failed runs | 0 | 2 |
+| Tool errors | 18 | **0** |
+
+- The 9B model found more root causes, with better-supported citations and no tool errors, but
+  chose the wrong action more often: `replace_part` instead of `drain_node` on two GPUs that fell
+  off the bus, and `monitor` on a power fault (it left a faulty node in service). Project A's
+  approval step for hardware actions matters more with this model.
+- **Two runs failed**, both on long investigations: one submitted three malformed diagnoses
+  (thermal runaway), one had a model call over the 300 s limit (noisy neighbor). Both are
+  detectable, which is what the fallback and hybrid below build on.
+- The hosted model's quality isn't measured ($0 decision); see the memo for what that leaves open.
+
+**Fallback, tested by killing vLLM mid-run** (`make b5-fallback`, 4 incidents, Project A branch
+`b5-fallback`, local Ollama `qwen3-agent` in the hosted API's place):
+
+| Incident | Model per call (from the trace) | Result |
+| --- | --- | --- |
+| 1 (vLLM killed at 90 s) | qwen3.5-9b, qwen3.5-9b, **then qwen3-agent** | correct, 378 s |
+| 2–4 | qwen3-agent only (primary refused, instantly) | all correct, 87–121 s |
+
+The conversation moved mid-incident without repeating tool calls, and 4/4 incidents finished with
+the right root cause. Incident 1 took 378 s instead of ~120 s because the stand-in had to load a
+21 GB model from cold; a hosted API has no such load.
+
+**Hybrid** (escalate to the hosted model when the self-hosted run fails or is unsure): both wrong
+root causes were failed runs (confidence 0); every completed diagnosis reported 0.85–0.95 and was
+right. So confidence adds nothing beyond "the run failed" on this set, and the useful rule is
+simply: **escalate failed runs**. That sends 2 of 25 incidents (8%) to the hosted model, about
+$0.008 per incident on average at Opus 5.5 prices, for a root-cause rate between 23/25 (if hosted
+does no better) and 25/25. With 25 incidents and no confident mistakes, this can't show whether
+confidence would catch subtler errors; the wrong actions above were all made with high confidence.
+
+**Cost per incident by volume** (B4 model; A100 throughput estimated):
+
+| Incidents/day | A100 on demand | A100 spot | Opus 5.5 |
+| --- | --- | --- | --- |
+| 20 | $4.43 | $0.84 | $0.10 |
+| 100 | $0.89 | $0.17 | $0.10 |
+| 1,000 | $0.09 | $0.02 | $0.10 |

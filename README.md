@@ -5,6 +5,20 @@ run on its own open model instead of a hosted API? This repo deploys an open mod
 OpenAI-compatible endpoint, measures it, plugs it into Project A through config only, and ends
 with a data-backed recommendation.
 
+## How this relates to Project A
+
+Two repos, one question. [Project A](https://github.com/joslo2345/incident-assistant) is the
+incident assistant itself; this repo is the model server it can run on. They share no code: Project
+A talks to the model over an OpenAI-compatible API, so it works the same with a hosted API, Ollama,
+or this repo's vLLM, chosen by configuration. This repo uses Project A as its real workload:
+
+- **Evals:** B1 and B5 run Project A's eval harness (its 25 test incidents with known answers)
+  against the self-hosted model; those scripts expect Project A checked out next to this repo.
+- **Load test:** B4 replays Project A's real agent conversations, exported once into
+  `data/b4_traces.json`, so the benchmark runs without Project A.
+- **Deployment:** the vLLM chart only accepts traffic from Project A's agent pod; Project A's
+  `values-selfhosted.yaml` points the agent here, with the hosted API as fallback.
+
 Constraint: **$0 spend.** Everything runs on one laptop (Apple M3 Pro, 36 GB). Cloud pieces are
 written and validated but never applied; cloud costs are calculated from published prices.
 
@@ -14,7 +28,7 @@ written and validated but never applied; cloud costs are calculated from publish
 | B2 | Kubernetes deployment | done: AKS GPU pool (validated) + Helm chart tested on kind |
 | B3 | Autoscaling and observability | done: KEDA on queue depth (40 s to scale decision), dashboard, alerts |
 | B4 | Load testing and cost | done: replayed agent traces, cost per 1,000 incidents, break-even |
-| B5 | Integration with Project A and recommendation | |
+| B5 | Integration with Project A and recommendation | done: config-only switch, fallback tested, [recommendation](docs/RECOMMENDATION.md) |
 
 Design choices: [docs/DECISIONS.md](docs/DECISIONS.md). Numbers: [docs/RESULTS.md](docs/RESULTS.md).
 
@@ -85,3 +99,15 @@ make cost     # cost per incident, break-even volume, charts -> eval/b4/cost.md,
 ```
 
 To re-export the traces (needs Project A's database running), see `scripts/export_traces.py`.
+
+## Integration with Project A (B5)
+
+Project A runs on the self-hosted model through configuration only: environment variables locally,
+`deploy/helm/values-selfhosted.yaml` (in Project A) on Kubernetes, with the hosted API as automatic
+fallback. Recommendation memo: [docs/RECOMMENDATION.md](docs/RECOMMENDATION.md).
+
+```bash
+make b5-eval       # Project A's full A6 eval on the self-hosted model (~1 h; Project A stack up)
+make b5-fallback   # kill vLLM mid-run; the agent must finish on the fallback model
+make b5-report     # side-by-side results, hybrid analysis, cost by volume -> eval/b5/summary.md
+```
