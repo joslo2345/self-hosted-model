@@ -162,6 +162,10 @@ Method choices:
 - **Dashboard** (`deploy/monitoring/dashboards/vllm-serving.json`) uses Project A's datasource uid,
   so it loads next to A's fleet and system dashboards unchanged. A test checks that every metric
   the dashboard, alerts and KEDA query use exists in vLLM 0.30 or kube-state-metrics.
+- **Spike test goes through the Service** (follow-up): an in-cluster TCP proxy, labeled as Project
+  A's agent so vLLM's NetworkPolicy admits it, forwards each connection to vLLM's Service, so new
+  replicas get traffic. The full scale-up run showed queued requests don't move to a new replica,
+  which is why the minimum replica count, not autoscaling, has to cover the normal peak.
 - **Prometheus may reach vLLM's port** (a second NetworkPolicy rule) for `/metrics`, which needs
   no key; the API on the same port still requires it.
 

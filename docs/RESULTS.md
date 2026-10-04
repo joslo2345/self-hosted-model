@@ -353,3 +353,34 @@ confidence would catch subtler errors; the wrong actions above were all made wit
 | 20 | $4.43 | $0.84 | $0.10 |
 | 100 | $0.89 | $0.17 | $0.10 |
 | 1,000 | $0.09 | $0.02 | $0.10 |
+
+## B3 follow-up · Full scale-up on kind with room for two replicas (2026-10-03)
+
+Docker Desktop's VM raised from 7.75 to 16 GB, so the replica KEDA adds can start. Same spike as
+B3 (60 s at 0.05, 180 s at 0.4, 120 s at 0.05 req/s). Two changes to the test so the new replica can
+get traffic: requests go through an in-cluster proxy into vLLM's Service
+(`deploy/kind/load-proxy.yaml`; `kubectl port-forward svc/vllm` pins every request to one pod), and
+queue depth is read from Prometheus, summed over pods. Output: `eval/b3/spike.md`; the one-replica
+run is kept as `eval/b3/spike-1replica.md`.
+
+| Milestone, from the start of the spike | 1 replica fits (B3) | 2 replicas fit |
+| --- | --- | --- |
+| Requests waiting above target | +15 s | +17 s |
+| KEDA asks for a second replica | +40 s | +44 s |
+| Second pod Ready | never (Pending) | **+96 s** (52 s from created, weights from the shared cache) |
+| Scaled back to 1 replica | +535 s | +527 s |
+| Requests failed | 0 of 81 | 0 of 81 |
+| Max requests waiting / TTFT p95 | 37 / 205 s | 39 / 206 s |
+
+- **Scale-up works end to end: 96 s from spike to a second serving replica on kind**, made of
+  44 s to decide (30 s queue average, scrape, HPA sync) and 52 s to start the pod.
+- **The second replica served 19 of the 81 requests (24%), but users waited as long as before.**
+  Two reasons. Both replicas run on this laptop's CPU, and vLLM's CPU backend pins each one to the
+  same 11 cores, so the second replica splits the compute instead of adding to it. On GPU each
+  replica has its own GPU; this part is a kind artifact.
+- **Requests already queued stay where they are.** Each request is queued inside one vLLM pod, so
+  the 20–30 requests waiting in the first replica when the second became Ready didn't move; only
+  new arrivals went to the new pod. This holds on GPU too: a late replica helps new requests, not
+  the backlog. It strengthens B3's conclusion: size the minimum replicas for the normal peak
+  rather than rely on scale-up during a spike, and cap the queue (or the agent's concurrency) so
+  a backlog can't build past what one replica clears within the 300 s call limit.

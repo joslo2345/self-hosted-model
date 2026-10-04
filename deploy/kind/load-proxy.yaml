@@ -1,0 +1,32 @@
+# B3 spike test on kind: a TCP proxy in Project A's namespace, so the test's requests reach vLLM
+# through its Service and spread over all ready replicas. (`kubectl port-forward svc/vllm` pins
+# every request to one pod, so a new replica would never get traffic.) It carries the agent's
+# label because vLLM's NetworkPolicy only admits Project A's agent pod. Test use only.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: load-proxy
+  namespace: ia
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: agent, app.kubernetes.io/component: load-proxy }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: agent, app.kubernetes.io/component: load-proxy }
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: socat
+          image: alpine/socat:1.8.0.3
+          # A new upstream connection per client connection: kube-proxy balances each one.
+          args: ["TCP-LISTEN:8000,fork,reuseaddr", "TCP:vllm.selfhost.svc:8000"]
+          ports: [{ containerPort: 8000 }]
+          resources:
+            requests: { cpu: 50m, memory: 16Mi }
+            limits: { memory: 64Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 65534
+            capabilities: { drop: [ALL] }

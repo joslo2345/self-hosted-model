@@ -293,15 +293,32 @@ async def _kubectl_json(cfg: SpikeConfig) -> dict[str, Any]:
     return doc
 
 
+async def _prometheus_sum(http: httpx.AsyncClient, cfg: SpikeConfig, metric: str) -> float | None:
+    """A metric summed over the release's pods, from Prometheus (every replica, unlike one pod's
+    /metrics; up to one scrape interval old)."""
+    labels = f'namespace="{cfg.namespace}",app_kubernetes_io_instance="{cfg.deployment}"'
+    query = f"sum({metric}{{{labels}}})"
+    try:
+        r = await http.get(f"{cfg.prometheus_url}/api/v1/query", params={"query": query}, timeout=5)
+        result = r.json()["data"]["result"]
+        return float(result[0]["value"][1]) if result else None
+    except (httpx.HTTPError, ValueError, KeyError, IndexError):
+        return None
+
+
 async def _sample(http: httpx.AsyncClient, cfg: SpikeConfig, t: float) -> Sample:
     s = Sample(t)
-    root = cfg.base_url.rstrip("/").removesuffix("/v1")
-    try:
-        text = (await http.get(f"{root}/metrics", timeout=5)).text
-        s.waiting = parse_prometheus_text(text, "vllm:num_requests_waiting")
-        s.running = parse_prometheus_text(text, "vllm:num_requests_running")
-    except httpx.HTTPError:
-        pass  # a busy or restarting pod: leave the queue unknown for this sample
+    if cfg.prometheus_url:
+        s.waiting = await _prometheus_sum(http, cfg, "vllm:num_requests_waiting")
+        s.running = await _prometheus_sum(http, cfg, "vllm:num_requests_running")
+    else:
+        root = cfg.base_url.rstrip("/").removesuffix("/v1")
+        try:
+            text = (await http.get(f"{root}/metrics", timeout=5)).text
+            s.waiting = parse_prometheus_text(text, "vllm:num_requests_waiting")
+            s.running = parse_prometheus_text(text, "vllm:num_requests_running")
+        except httpx.HTTPError:
+            pass  # a busy or restarting pod: leave the queue unknown for this sample
     s.desired, s.pods, s.pending, s.ready = parse_cluster(await _kubectl_json(cfg), cfg.deployment)
     if cfg.prometheus_url:
         try:
